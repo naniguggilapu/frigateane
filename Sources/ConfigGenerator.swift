@@ -44,11 +44,12 @@ enum ConfigGenerator {
         // go2rtc restreams
         s += "go2rtc:\n  streams:\n"
         for cam in c.cameras {
+            let nm = safeName(cam.name)
             if !cam.streamURL.isEmpty {
-                s += "    \(cam.name):\n      - ffmpeg:\(cam.streamURL)#video=copy#audio=copy\n"
+                s += "    \(nm):\n      - ffmpeg:\(cam.streamURL)#video=copy#audio=copy\n"
             }
             if !cam.subStreamURL.isEmpty {
-                s += "    \(cam.name)_sub:\n      - ffmpeg:\(cam.subStreamURL)#video=copy#audio=copy\n"
+                s += "    \(nm)_sub:\n      - ffmpeg:\(cam.subStreamURL)#video=copy#audio=copy\n"
             }
         }
         s += "\n"
@@ -59,25 +60,45 @@ enum ConfigGenerator {
             s += "  # No cameras configured yet — add them in the setup wizard.\n"
         }
         for (i, cam) in c.cameras.enumerated() {
-            let sub = cam.subStreamURL.isEmpty ? cam.name : "\(cam.name)_sub"
-            s += "  \(cam.name):\n"
+            let nm = safeName(cam.name)
+            let sub = cam.subStreamURL.isEmpty ? nm : "\(nm)_sub"
+            s += "  \(nm):\n"
             s += "    ui:\n      order: \(i + 1)\n"
             s += "    enabled: true\n"
             s += "    ffmpeg:\n      inputs:\n"
-            s += "        - path: rtsp://127.0.0.1:8554/\(cam.name)\n"
+            s += "        - path: rtsp://127.0.0.1:8554/\(nm)\n"
             s += "          input_args: preset-rtsp-restream\n"
             s += "          roles:\n            - record\n"
             s += "        - path: rtsp://127.0.0.1:8554/\(sub)\n"
             s += "          input_args: preset-rtsp-restream\n"
             s += "          roles:\n            - detect\n"
-            s += "    detect:\n      enabled: \(cam.detect)\n      width: 320\n      height: 180\n      fps: 5\n"
+            s += "    detect:\n      enabled: \(cam.detect)\n      width: \(cam.detectWidth)\n      height: \(cam.detectHeight)\n      fps: \(cam.detectFPS)\n"
+            let objs = cam.trackedObjects.isEmpty ? ["person"] : cam.trackedObjects
+            s += "    objects:\n      track:\n"
+            for o in objs { s += "        - \(o)\n" }
             s += "    record:\n      enabled: \(cam.record)\n"
             s += "      continuous:\n        days: \(c.retentionContinuousDays)\n"
             s += "      alerts:\n        retain:\n          days: \(c.retentionEventDays)\n"
             s += "      detections:\n        retain:\n          days: \(c.retentionEventDays)\n"
+            let extra = cam.extraYAML.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !extra.isEmpty {
+                for line in extra.split(separator: "\n", omittingEmptySubsequences: false) {
+                    s += "    \(line)\n"   // indent under the camera block
+                }
+            }
         }
         s += "\nversion: 0.17-0\n"
         return s
+    }
+
+    /// Camera names become YAML keys + restream ids — must be safe (no spaces).
+    private static func safeName(_ s: String) -> String {
+        let lowered = s.lowercased()
+        let mapped = lowered.map { ($0.isLetter || $0.isNumber) ? $0 : "_" }
+        var out = String(mapped)
+        while out.contains("__") { out = out.replacingOccurrences(of: "__", with: "_") }
+        out = out.trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+        return out.isEmpty ? "camera" : out
     }
 
     /// The container reaches the Mac host over the Apple-container bridge.

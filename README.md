@@ -97,11 +97,23 @@ runs a health check and waits for Frigate to report running.
 
 - [x] Health checks on container start + Frigate readiness wait.
 - [x] One-click container NAT networking install.
+- [x] Connection tests — MQTT CONNECT check, detector ANE self-test, per-camera RTSP reachability.
+- [x] Launch-at-login + auto-start Frigate/detector on launch.
+- [x] Per-camera config — tracked objects, detect FPS/resolution, and advanced zones/YAML.
+- [x] Dashboard live stats — inferences/sec sparkline, auto-refreshing stack status, menubar throughput.
 - [ ] Hardened container-runtime install (auto-detect macOS 26 + `container`).
-- [ ] "Test connection" buttons for MQTT and the detector.
+- [ ] **Portable bundled Python** — ship a relocatable interpreter (python-build-standalone) so the engine runs on any Mac (see *Known limitations*).
 - [ ] Bundled, signed + notarized release `.dmg`.
-- [ ] Per-camera object/zone editing in the wizard.
 - [ ] Optional CoreML `.mlpackage` detector path (no Python).
+
+## Known limitations
+
+- The bundled detector engine uses a Python venv whose base interpreter is the build
+  machine's CPython 3.13. On a different Mac (or after a major Homebrew Python upgrade)
+  the engine may need `bash scripts/provision_engine.sh` to rebuild the venv. A fully
+  relocatable Python is on the roadmap.
+- The app is ad-hoc signed, not notarized — first launch needs right-click → **Open**.
+- Running Frigate itself requires macOS 26 + Apple `container`.
 
 ## Contributing
 

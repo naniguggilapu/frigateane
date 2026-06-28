@@ -205,6 +205,7 @@ def main():
     p.add_argument("--endpoint", default="tcp://0.0.0.0:5555")
     p.add_argument("--model", default="AUTO")
     p.add_argument("--no-coreml", action="store_true")
+    p.add_argument("--selftest", action="store_true", help="load model, run one dummy inference, print result, exit")
     args = p.parse_args()
 
     det = Detector(MODELS_DIR, prefer_coreml=not args.no_coreml)
@@ -214,6 +215,26 @@ def main():
         for f in sorted(MODELS_DIR.glob("*.onnx")):
             det.load(f.name)
             break
+
+    if args.selftest:
+        if det.session is None:
+            print("SELFTEST FAIL: no model loaded")
+            sys.exit(2)
+        shape = det.session.get_inputs()[0].shape
+        dims = [int(d) if isinstance(d, int) else 1 for d in shape]
+        if len(dims) == 4:
+            dims = [1, dims[1] if dims[1] else 3, dims[2] if dims[2] else 320, dims[3] if dims[3] else 320]
+        x = np.random.rand(*dims).astype(np.float32)
+        # warmup + timed
+        det.infer(x)
+        t0 = time.time()
+        out = det.infer(x)
+        ms = (time.time() - t0) * 1000.0
+        providers = det.session.get_providers()
+        ane = "CoreMLExecutionProvider" in providers
+        print(f"SELFTEST OK model={det.model_name} providers={providers} ane={ane} "
+              f"latency_ms={ms:.1f} out_shape={list(np.shape(out[0]))}")
+        sys.exit(0)
 
     ctx = zmq.Context.instance()
     sock = ctx.socket(zmq.REP)

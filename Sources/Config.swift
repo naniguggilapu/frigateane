@@ -22,26 +22,52 @@ struct CameraConfig: Codable, Identifiable {
     var subStreamURL = ""                // detect stream (lower res); optional
     var detect = true
     var record = true
+    // advanced (all optional, backward-compatible)
+    var trackedObjects: [String] = ["person"]
+    var detectFPS = 5
+    var detectWidth = 320
+    var detectHeight = 180
+    var extraYAML = ""                   // power-user YAML appended under the camera
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, streamURL, subStreamURL, detect, record
+        case trackedObjects, detectFPS, detectWidth, detectHeight, extraYAML
+    }
+    init() {}
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(UUID.self, forKey: .id)) ?? UUID()
+        name = (try? c.decode(String.self, forKey: .name)) ?? "camera"
+        streamURL = (try? c.decode(String.self, forKey: .streamURL)) ?? ""
+        subStreamURL = (try? c.decode(String.self, forKey: .subStreamURL)) ?? ""
+        detect = (try? c.decode(Bool.self, forKey: .detect)) ?? true
+        record = (try? c.decode(Bool.self, forKey: .record)) ?? true
+        trackedObjects = (try? c.decode([String].self, forKey: .trackedObjects)) ?? ["person"]
+        detectFPS = (try? c.decode(Int.self, forKey: .detectFPS)) ?? 5
+        detectWidth = (try? c.decode(Int.self, forKey: .detectWidth)) ?? 320
+        detectHeight = (try? c.decode(Int.self, forKey: .detectHeight)) ?? 180
+        extraYAML = (try? c.decode(String.self, forKey: .extraYAML)) ?? ""
+    }
 }
 
 struct YOLOConfig: Codable {
-    var modelFile = "yolo.onnx"          // file inside engine/models
+    var modelFile = "yolo.onnx"
     var width = 320
     var height = 320
-    var computeUnits = "CPUAndNeuralEngine"   // ANE
+    var computeUnits = "CPUAndNeuralEngine"
 }
 
 struct LocalAIConfig: Codable {
     var enabled = false
     var provider = "ollama"
     var baseURL = "http://127.0.0.1:11434"
-    var model = "moondream"              // vision model for scene descriptions
+    var model = "moondream"
 }
 
 struct AppConfig: Codable {
     var mqtt = MQTTConfig()
     var ha = HAConfig()
-    var storagePath = ""                 // recordings folder (must be a mounted volume)
+    var storagePath = ""
     var cameras: [CameraConfig] = []
     var retentionContinuousDays = 7
     var retentionEventDays = 30
@@ -49,7 +75,33 @@ struct AppConfig: Codable {
     var localAI = LocalAIConfig()
     var detectorEndpoint = "tcp://0.0.0.0:5555"
     var frigateImage = "ghcr.io/blakeblackshear/frigate:0.17.0-beta1-standard-arm64"
-    var configured = false               // set true once the wizard completes
+    var configured = false
+    // new flags (backward-compatible)
+    var launchAtLogin = false
+    var autostartFrigate = false
+
+    enum CodingKeys: String, CodingKey {
+        case mqtt, ha, storagePath, cameras, retentionContinuousDays, retentionEventDays
+        case yolo, localAI, detectorEndpoint, frigateImage, configured
+        case launchAtLogin, autostartFrigate
+    }
+    init() {}
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        mqtt = (try? c.decode(MQTTConfig.self, forKey: .mqtt)) ?? MQTTConfig()
+        ha = (try? c.decode(HAConfig.self, forKey: .ha)) ?? HAConfig()
+        storagePath = (try? c.decode(String.self, forKey: .storagePath)) ?? ""
+        cameras = (try? c.decode([CameraConfig].self, forKey: .cameras)) ?? []
+        retentionContinuousDays = (try? c.decode(Int.self, forKey: .retentionContinuousDays)) ?? 7
+        retentionEventDays = (try? c.decode(Int.self, forKey: .retentionEventDays)) ?? 30
+        yolo = (try? c.decode(YOLOConfig.self, forKey: .yolo)) ?? YOLOConfig()
+        localAI = (try? c.decode(LocalAIConfig.self, forKey: .localAI)) ?? LocalAIConfig()
+        detectorEndpoint = (try? c.decode(String.self, forKey: .detectorEndpoint)) ?? "tcp://0.0.0.0:5555"
+        frigateImage = (try? c.decode(String.self, forKey: .frigateImage)) ?? "ghcr.io/blakeblackshear/frigate:0.17.0-beta1-standard-arm64"
+        configured = (try? c.decode(Bool.self, forKey: .configured)) ?? false
+        launchAtLogin = (try? c.decode(Bool.self, forKey: .launchAtLogin)) ?? false
+        autostartFrigate = (try? c.decode(Bool.self, forKey: .autostartFrigate)) ?? false
+    }
 }
 
 // MARK: - Store

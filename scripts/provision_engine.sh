@@ -6,12 +6,18 @@ ENGINE="$ROOT/engine"
 VENV="$ENGINE/venv"
 MODELS="$ENGINE/models"
 
-PY="${PYTHON:-python3}"
-echo "Using python: $($PY --version 2>&1)"
+# onnxruntime currently ships wheels for CPython 3.10–3.13. Prefer one of those.
+PY="${PYTHON:-}"
+if [ -z "$PY" ]; then
+  for cand in python3.13 python3.12 python3.11 python3.10 python3; do
+    if command -v "$cand" >/dev/null 2>&1; then PY="$cand"; break; fi
+  done
+fi
+echo "Using python: $PY ($($PY --version 2>&1))"
 
 if [ ! -x "$VENV/bin/python3" ]; then
-  echo "Creating venv at $VENV"
-  "$PY" -m venv "$VENV"
+  echo "Creating venv at $VENV (--copies for resilience)"
+  "$PY" -m venv --copies "$VENV"
 fi
 "$VENV/bin/python3" -m pip install --upgrade pip >/dev/null
 "$VENV/bin/python3" -m pip install -r "$ENGINE/requirements.txt"
