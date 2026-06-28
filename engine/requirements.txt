@@ -1,0 +1,3 @@
+numpy>=1.26
+onnxruntime>=1.18
+pyzmq>=26.0

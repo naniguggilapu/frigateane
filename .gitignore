@@ -1,0 +1,17 @@
+# Build artifacts
+/build/
+*.app
+*.dmg
+
+# Provisioned engine (large, machine-specific — recreated by scripts/provision_engine.sh)
+/engine/venv/
+/engine/models/*
+!/engine/models/.gitkeep
+
+# macOS
+.DS_Store
+._*
+
+# Local config / secrets (never commit)
+config.json
+*.local.yaml
