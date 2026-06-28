@@ -12,6 +12,11 @@ A native macOS app that runs [Frigate](https://frigate.video) object detection o
 the **Apple Neural Engine (ANE)** and gives you a one-window setup + dashboard for
 the whole stack — MQTT / Home Assistant, recordings storage, cameras, and models.
 
+<p align="center">
+  <img src="docs/screenshot.png" alt="Frigate ANE Detector dashboard — stack status, ANE detector, and live logs" width="660">
+</p>
+<p align="center"><sub>Dashboard — stack status, ANE detector throughput, and live logs.</sub></p>
+
 > **Status:** v0.1 — foundation. The app, setup wizard, config generator, and
 > detector engine work. Full container orchestration is wired but still being
 > hardened on live targets (see *Roadmap*).
