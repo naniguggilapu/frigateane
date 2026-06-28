@@ -106,6 +106,25 @@ runs a health check and waits for Frigate to report running.
 - [ ] Signed + notarized release `.dmg` (no right-click-to-open).
 - [ ] Optional CoreML `.mlpackage` detector path (no Python).
 
+## Signing & notarization
+
+To ship a build that opens without the right-click step, sign with a **Developer ID
+Application** certificate and notarize:
+
+```bash
+# one-time: store notarytool credentials
+xcrun notarytool store-credentials FrigateANE \
+  --apple-id you@example.com --team-id TEAMID --password <app-specific-password>
+
+SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+NOTARY_PROFILE=FrigateANE \
+bash scripts/notarize.sh
+```
+
+`scripts/notarize.sh` signs the app + bundled Python under the **hardened runtime**
+(see `Resources/entitlements.plist`), builds a DMG, submits to Apple, and staples the
+ticket. Requires an Apple Developer Program membership.
+
 ## Known limitations
 
 - The app is ad-hoc signed, not notarized — first launch needs right-click → **Open**.
