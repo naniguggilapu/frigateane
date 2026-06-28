@@ -34,10 +34,12 @@ cp "$ROOT/build/FrigateDetector" "$APP/Contents/MacOS/FrigateDetector"
 chmod +x "$APP/Contents/MacOS/FrigateDetector"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 
-echo "=== [4/5] bundling engine ==="
+echo "=== [4/5] bundling engine + networking ==="
 cp -R "$ENGINE/detector" "$APP/Contents/Resources/engine/detector"
 cp -R "$ENGINE/models"   "$APP/Contents/Resources/engine/models"
 cp -R "$ENGINE/venv"     "$APP/Contents/Resources/engine/venv"
+mkdir -p "$APP/Contents/Resources/networking"
+cp "$ROOT"/networking/* "$APP/Contents/Resources/networking/"
 
 echo "=== [5/5] ad-hoc sign ==="
 find "$APP" -name '.DS_Store' -delete 2>/dev/null || true

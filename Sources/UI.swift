@@ -357,9 +357,12 @@ final class DashboardWindowController: NSWindowController {
         let openUI = NSButton(title: "Open Frigate UI", target: self, action: #selector(openUI))
         let setup = NSButton(title: "Setup…", target: self, action: #selector(openSetup))
         let detToggle = NSButton(title: "Start/Stop Detector", target: self, action: #selector(toggleDetector))
-        for b in [startAll, stop, openUI, setup, detToggle] { b.bezelStyle = .rounded }
+        let netInstall = NSButton(title: "Install Networking", target: self, action: #selector(installNetworking))
+        for b in [startAll, stop, openUI, setup, detToggle, netInstall] { b.bezelStyle = .rounded }
         let controls = NSStackView(views: [startAll, stop, detToggle, openUI, setup])
         controls.spacing = 10
+        let controls2 = NSStackView(views: [netInstall])
+        controls2.spacing = 10
 
         logView.isEditable = false
         logView.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
@@ -371,7 +374,7 @@ final class DashboardWindowController: NSWindowController {
 
         let root = vstack([
             label("Frigate ANE", bold: true),
-            stackLabel, detLabel, controls, scroll,
+            stackLabel, detLabel, controls, controls2, scroll,
         ], spacing: 12)
         root.translatesAutoresizingMaskIntoConstraints = false
         let cv = window!.contentView!
@@ -395,8 +398,9 @@ final class DashboardWindowController: NSWindowController {
             guard let self = self else { return }
             var parts: [String] = []
             parts.append("container CLI: \(st.containerCLI ? "✓" : "✕")")
+            parts.append("NAT: \(st.natConfigured ? "✓" : "✕")")
             parts.append("image: \(st.imagePresent ? "✓" : "✕")")
-            parts.append("frigate: \(st.frigateRunning ? "running" : "stopped")")
+            parts.append("frigate: \(st.frigateRunning ? (st.frigateHealthy ? "healthy" : "running") : "stopped")")
             if self.store.config.localAI.enabled { parts.append("ollama: \(st.ollamaInstalled ? "✓" : "✕")") }
             self.stackLabel.stringValue = "stack — " + parts.joined(separator: "  ·  ")
             for n in st.notes { self.appendLog("• " + n + "\n") }
@@ -413,6 +417,10 @@ final class DashboardWindowController: NSWindowController {
         }
     }
     @objc private func stopFrigate() { orch.stopFrigate { [weak self] in self?.refreshStack() } }
+    @objc private func installNetworking() {
+        appendLog("Installing container NAT networking…\n")
+        orch.installNetworking { [weak self] _ in self?.refreshStack() }
+    }
     @objc private func toggleDetector() { engine.running ? engine.stop() : engine.start() }
     @objc private func openUI() { NSWorkspace.shared.open(URL(string: "http://localhost:8971")!) }
     @objc private func openSetup() { (NSApp.delegate as? AppDelegate)?.showSetup() }

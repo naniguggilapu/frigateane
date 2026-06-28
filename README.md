@@ -70,9 +70,19 @@ open ~/Applications/FrigateANEDetector.app
 Settings live in `~/Library/Application Support/FrigateANE/config.json`. No secrets
 are committed to the repo.
 
+## Networking (container ↔ LAN)
+
+Frigate runs inside Apple's `container` VM on subnet `192.168.64.0/24`. To reach LAN
+cameras / MQTT / Ollama it needs NAT. The app ships a one-click **Install Networking**
+action (Dashboard) that installs a `pf` ruleset + a `com.frigateane.nat` LaunchDaemon
+(templates in [`networking/`](networking/)) via a single admin prompt. Start-up also
+runs a health check and waits for Frigate to report running.
+
 ## Roadmap
 
-- [ ] Hardened one-click container runtime install / health checks.
+- [x] Health checks on container start + Frigate readiness wait.
+- [x] One-click container NAT networking install.
+- [ ] Hardened container-runtime install (auto-detect macOS 26 + `container`).
 - [ ] "Test connection" buttons for MQTT and the detector.
 - [ ] Bundled, signed + notarized release `.dmg`.
 - [ ] Per-camera object/zone editing in the wizard.

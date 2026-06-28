@@ -1,5 +1,6 @@
 // Orchestrator.swift — detects and drives the full stack: Apple `container`
-// runtime, the Frigate image, Ollama (local AI), and our ANE detector.
+// runtime, container NAT networking, the Frigate image, Ollama (local AI),
+// and our ANE detector.
 import Foundation
 
 struct Shell {
@@ -19,7 +20,6 @@ struct Shell {
         return (p.terminationStatus, String(data: data, encoding: .utf8) ?? "")
     }
 
-    /// Find a CLI on PATH or common Homebrew locations.
     static func which(_ tool: String) -> String? {
         let r = run("command -v \(tool) || true", timeout: 5)
         let path = r.out.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -29,13 +29,34 @@ struct Shell {
         }
         return nil
     }
+
+    /// Run a privileged shell command via one Authorization prompt.
+    @discardableResult
+    static func runAdmin(_ script: String) -> (code: Int32, out: String) {
+        let escaped = script
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        let osa = "do shell script \"\(escaped)\" with administrator privileges"
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        p.arguments = ["-e", osa]
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        p.standardError = pipe
+        do { try p.run() } catch { return (-1, "spawn failed: \(error)") }
+        p.waitUntilExit()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        return (p.terminationStatus, String(data: data, encoding: .utf8) ?? "")
+    }
 }
 
 struct StackStatus {
     var containerCLI = false
     var containerSystemUp = false
+    var natConfigured = false
     var imagePresent = false
     var frigateRunning = false
+    var frigateHealthy = false
     var ollamaInstalled = false
     var ollamaModelPresent = false
     var detectorRunning = false
@@ -46,7 +67,12 @@ final class Orchestrator {
     let store = ConfigStore.shared
     var onProgress: ((String) -> Void)?
 
+    private let natPlistPath = "/Library/LaunchDaemons/com.frigateane.nat.plist"
+    private let natConfPath  = "/etc/pf.anchors/frigateane-nat.conf"
+
     private func log(_ s: String) { DispatchQueue.main.async { self.onProgress?(s + "\n") } }
+
+    private var networkingDir: URL { Bundle.main.resourceURL!.appendingPathComponent("networking") }
 
     // MARK: detection
 
@@ -55,20 +81,23 @@ final class Orchestrator {
             var st = StackStatus()
             st.containerCLI = Shell.which("container") != nil
             if st.containerCLI {
-                let sys = Shell.run("container list >/dev/null 2>&1 && echo up || echo down", timeout: 10)
-                st.containerSystemUp = sys.out.contains("up")
-                let img = Shell.run("container image list 2>/dev/null | grep -q frigate && echo yes || echo no", timeout: 10)
-                st.imagePresent = img.out.contains("yes")
-                let run = Shell.run("container list 2>/dev/null | grep -q 'frigate.*running' && echo yes || echo no", timeout: 10)
-                st.frigateRunning = run.out.contains("yes")
+                st.containerSystemUp = Shell.run("container list >/dev/null 2>&1 && echo up || echo down", timeout: 10).out.contains("up")
+                st.imagePresent = Shell.run("container image list 2>/dev/null | grep -q frigate && echo yes || echo no", timeout: 10).out.contains("yes")
+                st.frigateRunning = Shell.run("container list 2>/dev/null | grep -q 'frigate.*running' && echo yes || echo no", timeout: 10).out.contains("yes")
             } else {
-                st.notes.append("Apple `container` CLI not found. Install from https://github.com/apple/container (requires macOS 26).")
+                st.notes.append("Apple `container` CLI not found — install from https://github.com/apple/container (requires macOS 26).")
             }
-            if let _ = Shell.which("ollama") {
+            st.natConfigured = FileManager.default.fileExists(atPath: self.natPlistPath)
+            if st.containerCLI && !st.natConfigured {
+                st.notes.append("Container NAT networking not installed — the container may not reach LAN cameras/MQTT. Use “Install Networking”.")
+            }
+            if st.frigateRunning {
+                st.frigateHealthy = Shell.run("curl -s -o /dev/null -w '%{http_code}' --max-time 4 http://localhost:8971 | grep -qE '200|401|302' && echo ok || echo no", timeout: 8).out.contains("ok")
+            }
+            if Shell.which("ollama") != nil {
                 st.ollamaInstalled = true
                 let model = self.store.config.localAI.model
-                let m = Shell.run("ollama list 2>/dev/null | grep -q '\(model)' && echo yes || echo no", timeout: 10)
-                st.ollamaModelPresent = m.out.contains("yes")
+                st.ollamaModelPresent = Shell.run("ollama list 2>/dev/null | grep -q '\(model)' && echo yes || echo no", timeout: 10).out.contains("yes")
             } else if self.store.config.localAI.enabled {
                 st.notes.append("Ollama not installed — needed for local AI scene descriptions (https://ollama.com).")
             }
@@ -77,36 +106,84 @@ final class Orchestrator {
         }
     }
 
-    // MARK: actions
+    // MARK: networking
 
-    /// Bring the whole stack up: write config, ensure container system, pull image, start Frigate.
+    /// Install the container NAT LaunchDaemon + pf rules (one admin prompt).
+    func installNetworking(_ done: @escaping (Bool) -> Void) {
+        DispatchQueue.global().async {
+            let conf = self.networkingDir.appendingPathComponent("frigate-nat.conf").path
+            let plist = self.networkingDir.appendingPathComponent("com.frigateane.nat.plist").path
+            let script = [
+                "mkdir -p /etc/pf.anchors",
+                "cp '\(conf)' '\(self.natConfPath)'",
+                "cp '\(plist)' '\(self.natPlistPath)'",
+                "chown root:wheel '\(self.natPlistPath)' '\(self.natConfPath)'",
+                "chmod 644 '\(self.natPlistPath)' '\(self.natConfPath)'",
+                "launchctl bootout system '\(self.natPlistPath)' 2>/dev/null || true",
+                "launchctl bootstrap system '\(self.natPlistPath)' 2>/dev/null || true",
+                "/sbin/pfctl -f '\(self.natConfPath)' -e 2>/dev/null || true",
+                "echo installed",
+            ].joined(separator: " && ")
+            self.log("Installing container NAT networking (admin required)…")
+            let r = Shell.runAdmin(script)
+            let ok = r.out.contains("installed")
+            self.log(ok ? "✓ NAT networking installed." : "✕ NAT install failed/cancelled.")
+            DispatchQueue.main.async { done(ok) }
+        }
+    }
+
+    // MARK: lifecycle
+
     func startAll(_ done: @escaping (Bool) -> Void) {
         DispatchQueue.global().async {
             do { try ConfigGenerator.writeAll(self.store) }
             catch { self.log("Failed to write config: \(error)"); DispatchQueue.main.async { done(false) }; return }
             self.log("Wrote Frigate config + start script.")
-
-            // model_cache: link the detector's model into the frigate config dir
             self.linkModelCache()
+
+            // Storage guard
+            if !FileManager.default.fileExists(atPath: self.store.config.storagePath) {
+                self.log("✕ Storage path not available: \(self.store.config.storagePath). Fix it in Setup → Storage.")
+                DispatchQueue.main.async { done(false) }; return
+            }
 
             guard Shell.which("container") != nil else {
                 self.log("Apple `container` CLI missing — cannot start Frigate. See setup notes.")
                 DispatchQueue.main.async { done(false) }; return
             }
+
             self.log("Ensuring container system is running…")
             _ = Shell.run("container system start 2>&1", timeout: 30)
 
+            if !FileManager.default.fileExists(atPath: self.natPlistPath) {
+                self.log("Note: NAT networking not installed — container may not reach the LAN. Use “Install Networking”.")
+            }
+
             if !Shell.run("container image list 2>/dev/null | grep -q frigate && echo y || echo n", timeout: 10).out.contains("y") {
-                self.log("Pulling Frigate image (first run, this can take a while)…")
-                let pull = Shell.run("container image pull \(self.store.config.frigateImage) 2>&1", timeout: 600)
-                self.log(pull.out.suffix(400).description)
+                self.log("Pulling Frigate image (first run — can take several minutes)…")
+                let pull = Shell.run("container image pull \(self.store.config.frigateImage) 2>&1", timeout: 1200)
+                self.log(String(pull.out.suffix(400)))
             }
 
             self.log("Starting Frigate…")
             let r = Shell.run("bash '\(self.store.startScriptURL.path)' 2>&1", timeout: 120)
             self.log(r.out)
-            let ok = r.code == 0
-            DispatchQueue.main.async { done(ok) }
+
+            // Health check: wait for the container to report running.
+            var healthy = false
+            for _ in 0..<15 {
+                if Shell.run("container list 2>/dev/null | grep -q 'frigate.*running' && echo y || echo n", timeout: 8).out.contains("y") {
+                    healthy = true; break
+                }
+                Thread.sleep(forTimeInterval: 2)
+            }
+            if healthy {
+                let ui = Shell.run("curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://localhost:8971 || true", timeout: 8).out
+                self.log("✓ Frigate running. UI http://localhost:8971 (HTTP \(ui.trimmingCharacters(in: .whitespacesAndNewlines))).")
+            } else {
+                self.log("⚠︎ Frigate did not report running within 30s — check logs above.")
+            }
+            DispatchQueue.main.async { done(healthy) }
         }
     }
 
@@ -125,14 +202,12 @@ final class Orchestrator {
             }
             let model = self.store.config.localAI.model
             self.log("Pulling Ollama model \(model)…")
-            let r = Shell.run("ollama pull \(model) 2>&1", timeout: 900)
-            self.log(r.out.suffix(300).description)
+            let r = Shell.run("ollama pull \(model) 2>&1", timeout: 1200)
+            self.log(String(r.out.suffix(300)))
             DispatchQueue.main.async { done(r.code == 0) }
         }
     }
 
-    /// Symlink engine/models into the frigate config's model_cache so the
-    /// container `model.path` resolves to the same YOLO file the ANE uses.
     private func linkModelCache() {
         let res = Bundle.main.resourceURL!.appendingPathComponent("engine/models")
         let dest = store.frigateConfigDir.appendingPathComponent("model_cache")

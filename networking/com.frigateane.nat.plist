@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.frigateane.nat</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/sbin/pfctl</string>
+    <string>-f</string>
+    <string>/etc/pf.anchors/frigateane-nat.conf</string>
+    <string>-e</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardErrorPath</key>
+  <string>/var/log/frigateane-nat.log</string>
+</dict>
+</plist>
