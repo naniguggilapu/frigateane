@@ -1,5 +1,13 @@
 # Frigate ANE Detector (macOS, Apple Silicon)
 
+![Platform](https://img.shields.io/badge/platform-macOS%20·%20Apple%20Silicon-black)
+![Swift](https://img.shields.io/badge/Swift-5%2B-orange)
+![License](https://img.shields.io/badge/license-MIT-blue)
+![Status](https://img.shields.io/badge/status-v0.1%20preview-yellow)
+
+> Run [Frigate](https://frigate.video) object detection on Apple's Neural Engine —
+> with a one-window setup + dashboard for the whole stack.
+
 A native macOS app that runs [Frigate](https://frigate.video) object detection on
 the **Apple Neural Engine (ANE)** and gives you a one-window setup + dashboard for
 the whole stack — MQTT / Home Assistant, recordings storage, cameras, and models.
@@ -88,6 +96,40 @@ runs a health check and waits for Frigate to report running.
 - [ ] Per-camera object/zone editing in the wizard.
 - [ ] Optional CoreML `.mlpackage` detector path (no Python).
 
+## Contributing
+
+Contributions are welcome — issues, feature ideas, and pull requests alike.
+
+1. Fork the repo and create a branch: `git checkout -b my-feature`.
+2. Build locally: `bash scripts/build.sh` (provisions the engine, compiles, assembles the `.app`).
+3. Keep changes focused; match the existing Swift style (programmatic AppKit, no storyboards).
+4. Open a PR describing the change and how you tested it.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details. Good first issues live in the
+[Roadmap](#roadmap) above — the MQTT/detector "test connection" buttons and per-camera
+zone editing are great starting points.
+
+## Acknowledgements
+
+This project stands on excellent open-source work:
+
+- **[Frigate](https://frigate.video)** by Blake Blackshear and contributors — the NVR this plugs into.
+- **[ONNX Runtime](https://onnxruntime.ai)** and its **CoreML execution provider** — the bridge to the Apple Neural Engine.
+- **[Apple `container`](https://github.com/apple/container)** — the native runtime that hosts Frigate on macOS.
+- **[Ultralytics YOLO](https://github.com/ultralytics/ultralytics)** — the detection models.
+- **[ZeroMQ](https://zeromq.org) / [pyzmq](https://github.com/zeromq/pyzmq)** — the detector IPC transport.
+- **[Ollama](https://ollama.com)** — optional local AI scene descriptions.
+- **[Home Assistant](https://www.home-assistant.io)** — MQTT discovery / smart-home integration.
+
+## Thanks
+
+Built by **[@naniguggilapu](https://github.com/naniguggilapu)**, pair-developed with
+**Claude (Anthropic)** — which helped design the architecture, write the Swift app and
+Python detector, generate the Frigate config layer, and wire up the container
+orchestration. Thanks to the Frigate community for the detector-plugin protocol that
+made the Apple Neural Engine path possible.
+
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). You're free to use, modify, and distribute this; a link
+back is appreciated but not required.
