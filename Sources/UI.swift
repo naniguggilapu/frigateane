@@ -408,9 +408,10 @@ final class DashboardWindowController: NSWindowController {
         let netInstall = NSButton(title: "Install Networking", target: self, action: #selector(installNetworking))
         let reveal = NSButton(title: "Reveal Config", target: self, action: #selector(revealConfig))
         let copyCfg = NSButton(title: "Copy config.yaml", target: self, action: #selector(copyConfig))
-        for b in [startAll, stop, openUI, setup, detToggle, netInstall, reveal, copyCfg] { b.bezelStyle = .rounded }
+        let installRuntime = NSButton(title: "Install Container Runtime", target: self, action: #selector(installRuntime))
+        for b in [startAll, stop, openUI, setup, detToggle, netInstall, reveal, copyCfg, installRuntime] { b.bezelStyle = .rounded }
         let controls = NSStackView(views: [startAll, stop, detToggle, openUI]); controls.spacing = 10
-        let controls2 = NSStackView(views: [netInstall, setup, reveal, copyCfg]); controls2.spacing = 10
+        let controls2 = NSStackView(views: [installRuntime, netInstall, reveal, copyCfg, setup]); controls2.spacing = 10
 
         spark.translatesAutoresizingMaskIntoConstraints = false
         spark.heightAnchor.constraint(equalToConstant: 44).isActive = true
@@ -444,7 +445,8 @@ final class DashboardWindowController: NSWindowController {
         orch.detect { [weak self] st in
             guard let self = self else { return }
             var parts: [String] = []
-            parts.append("container CLI: \(st.containerCLI ? "✓" : "✕")")
+            parts.append("macOS \(st.macOSMajor)\(st.macOSCompatible ? "" : " (needs 26+)")")
+            parts.append("container: \(st.containerCLI ? (st.containerVersion ?? "✓") : "✕")")
             parts.append("NAT: \(st.natConfigured ? "✓" : "✕")")
             parts.append("image: \(st.imagePresent ? "✓" : "✕")")
             parts.append("frigate: \(st.frigateRunning ? (st.frigateHealthy ? "healthy" : "running") : "stopped")")
@@ -461,6 +463,7 @@ final class DashboardWindowController: NSWindowController {
     }
     @objc private func stopFrigate() { orch.stopFrigate { [weak self] in self?.refreshStack() } }
     @objc private func installNetworking() { appendLog("Installing container NAT networking…\n"); orch.installNetworking { [weak self] _ in self?.refreshStack() } }
+    @objc private func installRuntime() { appendLog("Installing Apple container runtime…\n"); orch.installContainerRuntime { [weak self] _ in self?.refreshStack() } }
     @objc private func toggleDetector() { engine.running ? engine.stop() : engine.start() }
     @objc private func openUI() { NSWorkspace.shared.open(URL(string: "http://localhost:8971")!) }
     @objc private func openSetup() { (NSApp.delegate as? AppDelegate)?.showSetup() }

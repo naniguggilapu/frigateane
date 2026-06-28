@@ -102,7 +102,7 @@ runs a health check and waits for Frigate to report running.
 - [x] Per-camera config — tracked objects, detect FPS/resolution, and advanced zones/YAML.
 - [x] Dashboard live stats — inferences/sec sparkline, auto-refreshing stack status, menubar throughput.
 - [x] **Portable bundled Python** — ships a relocatable interpreter (python-build-standalone), so the engine runs on any Apple-Silicon Mac with no Homebrew/system Python.
-- [ ] Hardened container-runtime install (auto-detect macOS 26 + `container`).
+- [x] Container-runtime auto-detect + guided install (checks macOS 26, installs Apple `container` from the signed `.pkg`).
 - [ ] Signed + notarized release `.dmg` (no right-click-to-open).
 - [ ] Optional CoreML `.mlpackage` detector path (no Python).
 

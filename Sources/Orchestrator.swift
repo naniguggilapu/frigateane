@@ -51,7 +51,10 @@ struct Shell {
 }
 
 struct StackStatus {
+    var macOSMajor = 0
+    var macOSCompatible = false        // Apple `container` needs macOS 26+
     var containerCLI = false
+    var containerVersion: String? = nil
     var containerSystemUp = false
     var natConfigured = false
     var imagePresent = false
@@ -79,13 +82,24 @@ final class Orchestrator {
     func detect(_ done: @escaping (StackStatus) -> Void) {
         DispatchQueue.global().async {
             var st = StackStatus()
+            st.macOSMajor = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
+            st.macOSCompatible = st.macOSMajor >= 26
             st.containerCLI = Shell.which("container") != nil
+            if st.containerCLI {
+                let v = Shell.run("container --version 2>/dev/null", timeout: 6).out
+                if let m = v.range(of: #"[0-9]+\.[0-9]+\.[0-9]+"#, options: .regularExpression) {
+                    st.containerVersion = String(v[m])
+                }
+            }
+            if !st.macOSCompatible {
+                st.notes.append("Running Frigate needs macOS 26+ (Apple `container`). The ANE detector still works on this macOS.")
+            } else if !st.containerCLI {
+                st.notes.append("Apple `container` not installed — use “Install Container Runtime” to set it up.")
+            }
             if st.containerCLI {
                 st.containerSystemUp = Shell.run("container list >/dev/null 2>&1 && echo up || echo down", timeout: 10).out.contains("up")
                 st.imagePresent = Shell.run("container image list 2>/dev/null | grep -q frigate && echo yes || echo no", timeout: 10).out.contains("yes")
                 st.frigateRunning = Shell.run("container list 2>/dev/null | grep -q 'frigate.*running' && echo yes || echo no", timeout: 10).out.contains("yes")
-            } else {
-                st.notes.append("Apple `container` CLI not found — install from https://github.com/apple/container (requires macOS 26).")
             }
             st.natConfigured = FileManager.default.fileExists(atPath: self.natPlistPath)
             if st.containerCLI && !st.natConfigured {
@@ -128,6 +142,42 @@ final class Orchestrator {
             let r = Shell.runAdmin(script)
             let ok = r.out.contains("installed")
             self.log(ok ? "✓ NAT networking installed." : "✕ NAT install failed/cancelled.")
+            DispatchQueue.main.async { done(ok) }
+        }
+    }
+
+    // MARK: container runtime
+
+    /// Download Apple's signed `container` installer and install it (one admin prompt).
+    func installContainerRuntime(_ done: @escaping (Bool) -> Void) {
+        DispatchQueue.global().async {
+            guard ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26 else {
+                self.log("Apple `container` requires macOS 26 or newer — cannot install on this macOS.")
+                DispatchQueue.main.async { done(false) }; return
+            }
+            self.log("Resolving latest Apple container installer…")
+            let pinned = "https://github.com/apple/container/releases/download/1.0.0/container-1.0.0-installer-signed.pkg"
+            var url = pinned
+            let api = "https://api.github.com/repos/apple/container/releases/latest"
+            let found = Shell.run("curl -fsSL '\(api)' 2>/dev/null | grep -oE 'https://[^\"]*installer-signed\\.pkg' | head -1", timeout: 20).out
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if found.hasPrefix("https://") { url = found }
+            self.log("  \(url)")
+
+            let pkg = "/tmp/frigateane-container-installer.pkg"
+            let dl = Shell.run("curl -fL '\(url)' -o '\(pkg)' && echo ok || echo fail", timeout: 600)
+            guard dl.out.contains("ok") else {
+                self.log("Download failed."); DispatchQueue.main.async { done(false) }; return
+            }
+            self.log("Installing container runtime (admin required)…")
+            let r = Shell.runAdmin("installer -pkg '\(pkg)' -target / && echo installed")
+            let ok = r.out.contains("installed")
+            self.log(ok ? "✓ Container runtime installed." : "✕ Install failed/cancelled.")
+            if ok {
+                _ = Shell.run("container system start 2>&1", timeout: 30)
+                self.log("Container system started.")
+            }
+            _ = Shell.run("rm -f '\(pkg)'", timeout: 5)
             DispatchQueue.main.async { done(ok) }
         }
     }
