@@ -119,7 +119,7 @@ enum Probes {
     static func detectorSelfTest(done: @escaping (ProbeResult) -> Void) {
         DispatchQueue.global().async {
             let res = Bundle.main.resourceURL!.appendingPathComponent("engine")
-            let py = res.appendingPathComponent("venv/bin/python3").path
+            let py = res.appendingPathComponent("python/bin/python3").path
             let script = res.appendingPathComponent("detector/zmq_onnx_client.py").path
             guard FileManager.default.isExecutableFile(atPath: py) else {
                 DispatchQueue.main.async { done(.fail("engine not installed")) }; return

@@ -3,8 +3,9 @@
 *.app
 *.dmg
 
-# Provisioned engine (large, machine-specific — recreated by scripts/provision_engine.sh)
+# Provisioned engine (large — recreated by scripts/provision_engine.sh)
 /engine/venv/
+/engine/python/
 /engine/models/*
 !/engine/models/.gitkeep
 

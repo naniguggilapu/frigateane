@@ -24,7 +24,7 @@ final class Engine {
     init() {
         let res = Bundle.main.resourceURL!.appendingPathComponent("engine")
         workdir = res
-        pythonURL = res.appendingPathComponent("venv/bin/python3")
+        pythonURL = res.appendingPathComponent("python/bin/python3")
         scriptPath = res.appendingPathComponent("detector/zmq_onnx_client.py").path
     }
 

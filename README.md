@@ -101,19 +101,17 @@ runs a health check and waits for Frigate to report running.
 - [x] Launch-at-login + auto-start Frigate/detector on launch.
 - [x] Per-camera config — tracked objects, detect FPS/resolution, and advanced zones/YAML.
 - [x] Dashboard live stats — inferences/sec sparkline, auto-refreshing stack status, menubar throughput.
+- [x] **Portable bundled Python** — ships a relocatable interpreter (python-build-standalone), so the engine runs on any Apple-Silicon Mac with no Homebrew/system Python.
 - [ ] Hardened container-runtime install (auto-detect macOS 26 + `container`).
-- [ ] **Portable bundled Python** — ship a relocatable interpreter (python-build-standalone) so the engine runs on any Mac (see *Known limitations*).
-- [ ] Bundled, signed + notarized release `.dmg`.
+- [ ] Signed + notarized release `.dmg` (no right-click-to-open).
 - [ ] Optional CoreML `.mlpackage` detector path (no Python).
 
 ## Known limitations
 
-- The bundled detector engine uses a Python venv whose base interpreter is the build
-  machine's CPython 3.13. On a different Mac (or after a major Homebrew Python upgrade)
-  the engine may need `bash scripts/provision_engine.sh` to rebuild the venv. A fully
-  relocatable Python is on the roadmap.
 - The app is ad-hoc signed, not notarized — first launch needs right-click → **Open**.
-- Running Frigate itself requires macOS 26 + Apple `container`.
+- Running Frigate itself requires macOS 26 + Apple `container` (the ANE detector works
+  independently on macOS 13+).
+- onnxruntime is pinned to 1.26.0 — 1.27.x has a CoreML regression on this YOLO model.
 
 ## Contributing
 

@@ -7,17 +7,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="${1:-$HOME/Applications/FrigateANEDetector.app}"
 ENGINE="$ROOT/engine"
 
-echo "=== [1/5] provisioning engine (venv + deps + model) ==="
-# Reuse a prebuilt engine if present (fast path), else provision from scratch.
-PREBUILT="$HOME/frigate/FrigateDetector.app/Contents/Resources/app"
-if [ ! -x "$ENGINE/venv/bin/python3" ] && [ -x "$PREBUILT/venv/bin/python3" ]; then
-  echo "Reusing prebuilt engine from $PREBUILT"
-  mkdir -p "$ENGINE"
-  cp -R "$PREBUILT/venv" "$ENGINE/venv"
-  [ -d "$PREBUILT/models" ] && cp -R "$PREBUILT/models" "$ENGINE/models"
-else
-  bash "$ROOT/scripts/provision_engine.sh"
-fi
+echo "=== [1/5] provisioning portable engine (standalone python + deps + model) ==="
+bash "$ROOT/scripts/provision_engine.sh"
 
 echo "=== [2/5] compiling Swift (arm64, Swift 5 mode) ==="
 mkdir -p "$ROOT/build"
@@ -38,7 +29,7 @@ cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 echo "=== [4/5] bundling engine + networking ==="
 cp -R "$ENGINE/detector" "$APP/Contents/Resources/engine/detector"
 cp -R "$ENGINE/models"   "$APP/Contents/Resources/engine/models"
-cp -R "$ENGINE/venv"     "$APP/Contents/Resources/engine/venv"
+cp -R "$ENGINE/python"   "$APP/Contents/Resources/engine/python"
 mkdir -p "$APP/Contents/Resources/networking"
 cp "$ROOT"/networking/* "$APP/Contents/Resources/networking/"
 
