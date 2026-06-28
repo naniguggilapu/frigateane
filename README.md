@@ -1,3 +1,5 @@
+<p align="center"><img src="Resources/appicon_1024.png" width="128" alt="Frigate ANE Detector icon"></p>
+
 # Frigate ANE Detector (macOS, Apple Silicon)
 
 ![Platform](https://img.shields.io/badge/platform-macOS%20·%20Apple%20Silicon-black)

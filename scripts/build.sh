@@ -33,6 +33,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/engine"
 cp "$ROOT/build/FrigateDetector" "$APP/Contents/MacOS/FrigateDetector"
 chmod +x "$APP/Contents/MacOS/FrigateDetector"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
+[ -f "$ROOT/Resources/AppIcon.icns" ] && cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 
 echo "=== [4/5] bundling engine + networking ==="
 cp -R "$ENGINE/detector" "$APP/Contents/Resources/engine/detector"
