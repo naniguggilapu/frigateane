@@ -60,6 +60,7 @@ struct StackStatus {
     var imagePresent = false
     var frigateRunning = false
     var frigateHealthy = false
+    var frigateURL = "https://localhost:8971"
     var ollamaInstalled = false
     var ollamaModelPresent = false
     var detectorRunning = false
@@ -76,6 +77,38 @@ final class Orchestrator {
     private func log(_ s: String) { DispatchQueue.main.async { self.onProgress?(s + "\n") } }
 
     private var networkingDir: URL { Bundle.main.resourceURL!.appendingPathComponent("networking") }
+
+    /// The frigate container's IP on the Apple-container bridge (from `container list`).
+    func frigateIP() -> String? {
+        let out = Shell.run("container list 2>/dev/null | grep -i frigate | grep -oE '([0-9]{1,3}\\.){3}[0-9]{1,3}' | head -1", timeout: 8)
+            .out.trimmingCharacters(in: .whitespacesAndNewlines)
+        return out.isEmpty ? nil : out
+    }
+
+    /// Best URL for the Frigate UI: container IP if running, else localhost.
+    func frigateUIURL(_ done: @escaping (String) -> Void) {
+        DispatchQueue.global().async {
+            let ip = self.frigateIP() ?? "localhost"
+            DispatchQueue.main.async { done("https://\(ip):8971") }
+        }
+    }
+
+    /// Probe for a Scrypted server (default management ports) on the given host.
+    func detectScrypted(host: String, _ done: @escaping (Bool, String?) -> Void) {
+        DispatchQueue.global().async {
+            let h = host.isEmpty ? "localhost" : host
+            for port in [10443, 11080] {     // Scrypted: https mgmt / http
+                let scheme = port == 10443 ? "https" : "http"
+                let code = Shell.run("curl -sk -o /dev/null -w '%{http_code}' --max-time 3 \(scheme)://\(h):\(port) || true", timeout: 6)
+                    .out.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !code.isEmpty && code != "000" {
+                    DispatchQueue.main.async { done(true, "https://\(h):10443") }
+                    return
+                }
+            }
+            DispatchQueue.main.async { done(false, nil) }
+        }
+    }
 
     // MARK: detection
 
@@ -106,11 +139,18 @@ final class Orchestrator {
                 st.notes.append("Container NAT networking not installed — the container may not reach LAN cameras/MQTT. Use “Install Networking”.")
             }
             if st.frigateRunning {
-                // Frigate 0.17 serves the UI over HTTPS on 8971 (self-signed) — any
-                // HTTP status back means it's up (a plain http:// probe returns 400).
-                let code = Shell.run("curl -sk -o /dev/null -w '%{http_code}' --max-time 4 https://localhost:8971 || true", timeout: 8)
-                    .out.trimmingCharacters(in: .whitespacesAndNewlines)
-                st.frigateHealthy = !code.isEmpty && code != "000"
+                // Frigate 0.17 serves the UI over HTTPS on 8971 (self-signed). Apple
+                // `container` may publish to localhost OR only to the container IP, so
+                // probe both and report whichever answers.
+                let ip = self.frigateIP()
+                var url = "https://localhost:8971", ok = false
+                for host in [ip, "localhost"].compactMap({ $0 }) {
+                    let code = Shell.run("curl -sk -o /dev/null -w '%{http_code}' --max-time 4 https://\(host):8971 || true", timeout: 8)
+                        .out.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !code.isEmpty && code != "000" { url = "https://\(host):8971"; ok = true; break }
+                }
+                st.frigateHealthy = ok
+                st.frigateURL = url
             }
             if Shell.which("ollama") != nil {
                 st.ollamaInstalled = true

@@ -60,9 +60,21 @@ struct CameraConfig: Codable, Identifiable {
 
 struct YOLOConfig: Codable {
     var modelFile = "yolo.onnx"
+    var modelType = "yolo-generic"       // Frigate model.model_type
     var width = 320
     var height = 320
     var computeUnits = "CPUAndNeuralEngine"
+
+    enum CodingKeys: String, CodingKey { case modelFile, modelType, width, height, computeUnits }
+    init() {}
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        modelFile = (try? c.decode(String.self, forKey: .modelFile)) ?? "yolo.onnx"
+        modelType = (try? c.decode(String.self, forKey: .modelType)) ?? "yolo-generic"
+        width = (try? c.decode(Int.self, forKey: .width)) ?? 320
+        height = (try? c.decode(Int.self, forKey: .height)) ?? 320
+        computeUnits = (try? c.decode(String.self, forKey: .computeUnits)) ?? "CPUAndNeuralEngine"
+    }
 }
 
 struct LocalAIConfig: Codable {
@@ -88,11 +100,12 @@ struct AppConfig: Codable {
     var launchAtLogin = false
     var autostartFrigate = false
     var resetAdminPassword = false       // one-shot: makes Frigate reset the admin pw on next start
+    var scryptedHost = ""                // optional Scrypted host for rebroadcast links
 
     enum CodingKeys: String, CodingKey {
         case mqtt, ha, storagePath, cameras, retentionContinuousDays, retentionEventDays
         case yolo, localAI, detectorEndpoint, frigateImage, configured
-        case launchAtLogin, autostartFrigate, resetAdminPassword
+        case launchAtLogin, autostartFrigate, resetAdminPassword, scryptedHost
     }
     init() {}
     init(from d: Decoder) throws {
@@ -111,6 +124,7 @@ struct AppConfig: Codable {
         launchAtLogin = (try? c.decode(Bool.self, forKey: .launchAtLogin)) ?? false
         autostartFrigate = (try? c.decode(Bool.self, forKey: .autostartFrigate)) ?? false
         resetAdminPassword = (try? c.decode(Bool.self, forKey: .resetAdminPassword)) ?? false
+        scryptedHost = (try? c.decode(String.self, forKey: .scryptedHost)) ?? ""
     }
 }
 
@@ -154,5 +168,20 @@ final class ConfigStore {
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? enc.encode(config) else { return false }
         return (try? data.write(to: configJSONURL)) != nil
+    }
+
+    /// Backup: write the current config as JSON to a chosen file.
+    func exportConfig(to url: URL) -> Bool {
+        let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? enc.encode(config) else { return false }
+        return (try? data.write(to: url)) != nil
+    }
+
+    /// Restore: load config from a JSON file (replaces current settings).
+    func importConfig(from url: URL) -> Bool {
+        guard let data = try? Data(contentsOf: url),
+              let c = try? JSONDecoder().decode(AppConfig.self, from: data) else { return false }
+        config = c
+        return save()
     }
 }

@@ -28,7 +28,7 @@ enum ConfigGenerator {
         s += "detectors:\n  apple_silicon:\n    type: zmq\n    endpoint: tcp://\(hostIP):5555\n    request_timeout_ms: 2000\n\n"
 
         // Model
-        s += "model:\n  model_type: yolo-generic\n"
+        s += "model:\n  model_type: \(c.yolo.modelType)\n"
         s += "  width: \(c.yolo.width)\n  height: \(c.yolo.height)\n"
         s += "  input_tensor: nchw\n  input_dtype: float\n"
         s += "  path: /config/model_cache/\(c.yolo.modelFile)\n\n"

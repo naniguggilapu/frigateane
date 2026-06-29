@@ -182,9 +182,13 @@ final class SetupWindowController: NSWindowController {
     private let storageField = field("", width: 360)
     private let storageWarn = label("", secondary: true)
     private let yoloPopup = NSPopUpButton()
+    private let typePopup = NSPopUpButton()
     private let yoloW = field("320", width: 70)
     private let yoloH = field("320", width: 70)
     private let detResult = label("", secondary: true)
+    private let orch = Orchestrator()
+    private let scryptedField = field("", width: 160, placeholder: "Scrypted host (optional)")
+    private let scryptedResult = label("", secondary: true)
     private let aiEnable = NSButton(checkboxWithTitle: "Enable local AI scene descriptions (Ollama)", target: nil, action: nil)
     private let aiBase = field("http://127.0.0.1:11434")
     private let aiModel = field("moondream", width: 160)
@@ -275,10 +279,13 @@ final class SetupWindowController: NSWindowController {
         scroll.widthAnchor.constraint(greaterThanOrEqualToConstant: 700).isActive = true
         let ret = NSStackView(views: [label("Retention:", secondary: true), label("continuous", secondary: true), retCont,
                                       label("days · events", secondary: true), retEvent, label("days", secondary: true)]); ret.spacing = 6
+        let detectBtn = NSButton(title: "Detect Scrypted", target: self, action: #selector(detectScryptedTapped)); detectBtn.bezelStyle = .rounded
+        let openBtn = NSButton(title: "Open", target: self, action: #selector(openScryptedTapped)); openBtn.bezelStyle = .rounded
+        let scryptedRow = NSStackView(views: [label("Scrypted:", secondary: true), scryptedField, detectBtn, openBtn]); scryptedRow.spacing = 6
         return vstack([
             label("Cameras", bold: true),
             label("Main = recording, Sub = detection. Per-camera objects, fps, size; “Zones/YAML…” for advanced.", secondary: true),
-            add, scroll, ret,
+            add, scroll, ret, scryptedRow, scryptedResult,
         ])
     }
     private func modelsView() -> NSView {
@@ -288,12 +295,17 @@ final class SetupWindowController: NSWindowController {
             for f in files.sorted() where f.hasSuffix(".onnx") { yoloPopup.addItem(withTitle: f) }
         }
         if yoloPopup.numberOfItems == 0 { yoloPopup.addItem(withTitle: "yolo.onnx") }
+        if typePopup.numberOfItems == 0 {
+            typePopup.addItems(withTitles: ["yolo-generic", "yolonas", "yolov9", "rfdetr", "dfine"])
+        }
         let selftest = NSButton(title: "Self-test detector (ANE)", target: self, action: #selector(selfTestDetector)); selftest.bezelStyle = .rounded
         let aiInstall = NSButton(title: "Install model", target: self, action: #selector(installAIModel)); aiInstall.bezelStyle = .rounded
         let aiRow = NSStackView(views: [aiModel, aiInstall]); aiRow.spacing = 8
         return vstack([
-            label("Detector model (YOLO on Apple Neural Engine)", bold: true),
-            formRow("Model", yoloPopup),
+            label("Detector model (runs on the Apple Neural Engine)", bold: true),
+            formRow("Model file", yoloPopup),
+            formRow("Model type", typePopup),
+            label("yolo-generic fits the bundled YOLO; other types need a matching .onnx model.", secondary: true),
             formRow("Input W×H", { let s = NSStackView(views: [yoloW, label("×"), yoloH]); s.spacing = 6; return s }()),
             NSStackView(views: [selftest, detResult]),
             label(" "),
@@ -352,8 +364,23 @@ final class SetupWindowController: NSWindowController {
     }
     @objc private func installAIModel() {
         commitToConfig()
-        let orch = Orchestrator()
         orch.installOllamaModel { ok in let a = NSAlert(); a.messageText = ok ? "Model installed." : "Could not install model (is Ollama installed?)."; a.runModal() }
+    }
+    @objc private func detectScryptedTapped() {
+        scryptedResult.stringValue = "checking…"; scryptedResult.textColor = .secondaryLabelColor
+        orch.detectScrypted(host: scryptedField.stringValue) { [weak self] found, _ in
+            if found {
+                self?.scryptedResult.stringValue = "✓ Scrypted found — Open it, copy rebroadcast RTSP URLs into the fields above (no login)."
+                self?.scryptedResult.textColor = .systemGreen
+            } else {
+                self?.scryptedResult.stringValue = "✕ No Scrypted at that host (checked ports 10443 / 11080)."
+                self?.scryptedResult.textColor = .systemOrange
+            }
+        }
+    }
+    @objc private func openScryptedTapped() {
+        let host = scryptedField.stringValue.isEmpty ? "localhost" : scryptedField.stringValue
+        if let u = URL(string: "https://\(host):10443") { NSWorkspace.shared.open(u) }
     }
 
     private func loadFromConfig() {
@@ -364,6 +391,8 @@ final class SetupWindowController: NSWindowController {
         storageField.stringValue = c.storagePath
         retCont.stringValue = String(c.retentionContinuousDays); retEvent.stringValue = String(c.retentionEventDays)
         yoloW.stringValue = String(c.yolo.width); yoloH.stringValue = String(c.yolo.height)
+        typePopup.selectItem(withTitle: c.yolo.modelType)
+        scryptedField.stringValue = c.scryptedHost
         aiEnable.state = c.localAI.enabled ? .on : .off; aiBase.stringValue = c.localAI.baseURL; aiModel.stringValue = c.localAI.model
         loginCheck.state = (c.launchAtLogin || LoginItem.isEnabled) ? .on : .off
         autostartCheck.state = c.autostartFrigate ? .on : .off
@@ -380,6 +409,8 @@ final class SetupWindowController: NSWindowController {
             c.retentionContinuousDays = Int(retCont.stringValue) ?? 7
             c.retentionEventDays = Int(retEvent.stringValue) ?? 30
             c.yolo.modelFile = yoloPopup.titleOfSelectedItem ?? "yolo.onnx"
+            c.yolo.modelType = typePopup.titleOfSelectedItem ?? "yolo-generic"
+            c.scryptedHost = scryptedField.stringValue
             c.yolo.width = Int(yoloW.stringValue) ?? 320; c.yolo.height = Int(yoloH.stringValue) ?? 320
             c.localAI.enabled = aiEnable.state == .on; c.localAI.baseURL = aiBase.stringValue; c.localAI.model = aiModel.stringValue
             c.launchAtLogin = loginCheck.state == .on; c.autostartFrigate = autostartCheck.state == .on
@@ -437,10 +468,12 @@ final class DashboardWindowController: NSWindowController {
         let installRuntime = NSButton(title: "Install Container Runtime", target: self, action: #selector(installRuntime))
         let showPw = NSButton(title: "Show Admin Password", target: self, action: #selector(showPw))
         let resetPw = NSButton(title: "Reset Admin Password", target: self, action: #selector(resetPw))
-        for b in [startAll, stop, openUI, setup, detToggle, netInstall, reveal, copyCfg, installRuntime, showPw, resetPw] { b.bezelStyle = .rounded }
+        let backup = NSButton(title: "Backup Config…", target: self, action: #selector(backupConfig))
+        let restore = NSButton(title: "Restore Config…", target: self, action: #selector(restoreConfig))
+        for b in [startAll, stop, openUI, setup, detToggle, netInstall, reveal, copyCfg, installRuntime, showPw, resetPw, backup, restore] { b.bezelStyle = .rounded }
         let controls = NSStackView(views: [startAll, stop, detToggle, openUI]); controls.spacing = 10
         let controls2 = NSStackView(views: [installRuntime, netInstall, reveal, copyCfg, setup]); controls2.spacing = 10
-        let controls3 = NSStackView(views: [showPw, resetPw]); controls3.spacing = 10
+        let controls3 = NSStackView(views: [showPw, resetPw, backup, restore]); controls3.spacing = 10
 
         spark.translatesAutoresizingMaskIntoConstraints = false
         spark.heightAnchor.constraint(equalToConstant: 44).isActive = true
@@ -504,7 +537,26 @@ final class DashboardWindowController: NSWindowController {
         }
     }
     @objc private func toggleDetector() { engine.running ? engine.stop() : engine.start() }
-    @objc private func openUI() { NSWorkspace.shared.open(URL(string: "https://localhost:8971")!) }
+    @objc private func openUI() {
+        orch.frigateUIURL { [weak self] url in
+            self?.appendLog("Opening \(url)\n")
+            if let u = URL(string: url) { NSWorkspace.shared.open(u) }
+        }
+    }
+    @objc private func backupConfig() {
+        let p = NSSavePanel(); p.nameFieldStringValue = "frigateane-config.json"
+        if p.runModal() == .OK, let url = p.url {
+            appendLog(store.exportConfig(to: url) ? "✓ Config backed up to \(url.path)\n" : "✕ Backup failed.\n")
+        }
+    }
+    @objc private func restoreConfig() {
+        let p = NSOpenPanel(); p.canChooseFiles = true; p.canChooseDirectories = false; p.allowsMultipleSelection = false
+        if p.runModal() == .OK, let url = p.url {
+            if store.importConfig(from: url) {
+                appendLog("✓ Config restored from \(url.lastPathComponent). Open Setup to review, then Start All.\n")
+            } else { appendLog("✕ Restore failed — not a valid config file.\n") }
+        }
+    }
     @objc private func openSetup() { (NSApp.delegate as? AppDelegate)?.showSetup() }
     @objc private func revealConfig() {
         _ = try? ConfigGenerator.writeAll(store)

@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.2.0
+
+### Added
+- **Backup / Restore config** — export your settings to a JSON file and restore them later (dashboard).
+- **Auto-detect container IP** — "Open Frigate UI" and the health check now use the Frigate
+  container's own IP (falling back to `localhost`), so the UI opens even on Macs where Apple
+  `container` doesn't publish to localhost.
+- **Model-type picker** — choose the Frigate `model_type` (yolo-generic / yolonas / yolov9 /
+  rfdetr / dfine) alongside the model file and input size.
+- **Scrypted detection** — detect a Scrypted server (host + default ports) and open it to copy
+  each camera's **rebroadcast RTSP URL** (no camera credentials needed).
+
 ## v1.1.2
 
 ### Fixed
