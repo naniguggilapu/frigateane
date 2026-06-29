@@ -254,6 +254,10 @@ final class Orchestrator {
                 let ui = Shell.run("curl -sk -o /dev/null -w '%{http_code}' --max-time 5 https://localhost:8971 || true", timeout: 8)
                     .out.trimmingCharacters(in: .whitespacesAndNewlines)
                 self.log("✓ Frigate running. UI https://localhost:8971 (HTTP \(ui)).")
+                Thread.sleep(forTimeInterval: 3)   // let first-start logs flush
+                let pw = Shell.run("container logs frigate 2>&1 | grep -iE 'user: admin|password: ' | tail -6", timeout: 12)
+                    .out.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !pw.isEmpty { self.log("Admin login (first start):"); self.log(pw) }
             } else {
                 self.log("⚠︎ Frigate did not report running within 30s — check logs above.")
             }
@@ -266,6 +270,59 @@ final class Orchestrator {
             _ = Shell.run("container stop frigate 2>/dev/null; true", timeout: 30)
             self.log("Frigate stopped.")
             DispatchQueue.main.async { done() }
+        }
+    }
+
+    // MARK: admin password
+
+    /// Surface the admin login Frigate prints once at first start (it auto-creates an
+    /// `admin` user with a random password). Returns the matching log lines, if any.
+    func showAdminPassword(_ done: @escaping (String?) -> Void) {
+        DispatchQueue.global().async {
+            let out = Shell.run("container logs frigate 2>&1 | grep -iE 'user: admin|password: ' | tail -8", timeout: 12)
+                .out.trimmingCharacters(in: .whitespacesAndNewlines)
+            if out.isEmpty {
+                self.log("No admin-password line found in the logs (it may already be set, or auth disabled). Use “Reset Admin Password”.")
+            } else {
+                self.log("Frigate admin login (from logs):")
+                self.log(out)
+            }
+            DispatchQueue.main.async { done(out.isEmpty ? nil : out) }
+        }
+    }
+
+    /// Reset the Frigate admin password: flip `reset_admin_password: true`, restart
+    /// Frigate so it regenerates a password, surface it, then clear the flag.
+    func resetAdminPassword(_ done: @escaping (Bool) -> Void) {
+        DispatchQueue.global().async {
+            guard Shell.which("container") != nil else {
+                self.log("container CLI missing."); DispatchQueue.main.async { done(false) }; return
+            }
+            self.store.update { $0.resetAdminPassword = true }
+            do { try ConfigGenerator.writeAll(self.store) } catch {
+                self.log("Failed to write config: \(error)"); DispatchQueue.main.async { done(false) }; return
+            }
+            self.linkModelCache()
+            self.log("Resetting admin password — restarting Frigate…")
+            _ = Shell.run("bash '\(self.store.startScriptURL.path)' 2>&1", timeout: 120)
+            var up = false
+            for _ in 0..<15 {
+                if Shell.run("container list 2>/dev/null | grep -q 'frigate.*running' && echo y || echo n", timeout: 8).out.contains("y") { up = true; break }
+                Thread.sleep(forTimeInterval: 2)
+            }
+            Thread.sleep(forTimeInterval: 5)   // let the password log line appear
+            let out = Shell.run("container logs frigate 2>&1 | grep -iE 'user: admin|password: ' | tail -8", timeout: 12)
+                .out.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Clear the flag so the next restart doesn't reset again.
+            self.store.update { $0.resetAdminPassword = false }
+            _ = try? ConfigGenerator.writeAll(self.store)
+            if up && !out.isEmpty {
+                self.log("New admin login:")
+                self.log(out)
+            } else {
+                self.log("Reset done, but no password line captured — check logs above.")
+            }
+            DispatchQueue.main.async { done(up) }
         }
     }
 

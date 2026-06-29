@@ -431,9 +431,12 @@ final class DashboardWindowController: NSWindowController {
         let reveal = NSButton(title: "Reveal Config", target: self, action: #selector(revealConfig))
         let copyCfg = NSButton(title: "Copy config.yaml", target: self, action: #selector(copyConfig))
         let installRuntime = NSButton(title: "Install Container Runtime", target: self, action: #selector(installRuntime))
-        for b in [startAll, stop, openUI, setup, detToggle, netInstall, reveal, copyCfg, installRuntime] { b.bezelStyle = .rounded }
+        let showPw = NSButton(title: "Show Admin Password", target: self, action: #selector(showPw))
+        let resetPw = NSButton(title: "Reset Admin Password", target: self, action: #selector(resetPw))
+        for b in [startAll, stop, openUI, setup, detToggle, netInstall, reveal, copyCfg, installRuntime, showPw, resetPw] { b.bezelStyle = .rounded }
         let controls = NSStackView(views: [startAll, stop, detToggle, openUI]); controls.spacing = 10
         let controls2 = NSStackView(views: [installRuntime, netInstall, reveal, copyCfg, setup]); controls2.spacing = 10
+        let controls3 = NSStackView(views: [showPw, resetPw]); controls3.spacing = 10
 
         spark.translatesAutoresizingMaskIntoConstraints = false
         spark.heightAnchor.constraint(equalToConstant: 44).isActive = true
@@ -444,7 +447,7 @@ final class DashboardWindowController: NSWindowController {
         let scroll = NSScrollView(); scroll.documentView = logView; scroll.hasVerticalScroller = true
         scroll.borderType = .bezelBorder; scroll.translatesAutoresizingMaskIntoConstraints = false
 
-        let root = vstack([label("Frigate ANE", bold: true), stackLabel, detLabel, sparkRow, controls, controls2, scroll], spacing: 12)
+        let root = vstack([label("Frigate ANE", bold: true), stackLabel, detLabel, sparkRow, controls, controls2, controls3, scroll], spacing: 12)
         root.translatesAutoresizingMaskIntoConstraints = false
         let cv = window!.contentView!; cv.addSubview(root)
         NSLayoutConstraint.activate([
@@ -486,6 +489,16 @@ final class DashboardWindowController: NSWindowController {
     @objc private func stopFrigate() { orch.stopFrigate { [weak self] in self?.refreshStack() } }
     @objc private func installNetworking() { appendLog("Installing container NAT networking…\n"); orch.installNetworking { [weak self] _ in self?.refreshStack() } }
     @objc private func installRuntime() { appendLog("Installing Apple container runtime…\n"); orch.installContainerRuntime { [weak self] _ in self?.refreshStack() } }
+    @objc private func showPw() { appendLog("Fetching Frigate admin login from logs…\n"); orch.showAdminPassword { _ in } }
+    @objc private func resetPw() {
+        let a = NSAlert(); a.messageText = "Reset Frigate admin password?"
+        a.informativeText = "Restarts Frigate and generates a new admin password (shown in the log below)."
+        a.addButton(withTitle: "Reset"); a.addButton(withTitle: "Cancel")
+        if a.runModal() == .alertFirstButtonReturn {
+            appendLog("Resetting admin password…\n")
+            orch.resetAdminPassword { [weak self] _ in self?.refreshStack() }
+        }
+    }
     @objc private func toggleDetector() { engine.running ? engine.stop() : engine.start() }
     @objc private func openUI() { NSWorkspace.shared.open(URL(string: "https://localhost:8971")!) }
     @objc private func openSetup() { (NSApp.delegate as? AppDelegate)?.showSetup() }

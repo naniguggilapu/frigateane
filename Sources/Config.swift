@@ -87,11 +87,12 @@ struct AppConfig: Codable {
     // new flags (backward-compatible)
     var launchAtLogin = false
     var autostartFrigate = false
+    var resetAdminPassword = false       // one-shot: makes Frigate reset the admin pw on next start
 
     enum CodingKeys: String, CodingKey {
         case mqtt, ha, storagePath, cameras, retentionContinuousDays, retentionEventDays
         case yolo, localAI, detectorEndpoint, frigateImage, configured
-        case launchAtLogin, autostartFrigate
+        case launchAtLogin, autostartFrigate, resetAdminPassword
     }
     init() {}
     init(from d: Decoder) throws {
@@ -109,6 +110,7 @@ struct AppConfig: Codable {
         configured = (try? c.decode(Bool.self, forKey: .configured)) ?? false
         launchAtLogin = (try? c.decode(Bool.self, forKey: .launchAtLogin)) ?? false
         autostartFrigate = (try? c.decode(Bool.self, forKey: .autostartFrigate)) ?? false
+        resetAdminPassword = (try? c.decode(Bool.self, forKey: .resetAdminPassword)) ?? false
     }
 }
 

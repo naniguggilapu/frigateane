@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.1.1
+
+Verified end-to-end on a live camera, including the Frigate web UI loading.
+
+### Added
+- **Admin password management.** Frigate auto-generates an `admin` password on first
+  start (shown only once, in its logs). The dashboard now surfaces it with
+  **Show Admin Password**, and **Reset Admin Password** regenerates it (flips
+  `reset_admin_password`, restarts Frigate, captures the new password, clears the flag).
+
+### Fixed
+- **Setup wizard "Add Camera"** now actually shows the camera row — the camera list's
+  scroll view collapsed to zero height (missing bottom constraint), so rows were added
+  but invisible; the list is also flipped so rows stack top-down. (Verified by driving
+  the live UI.)
+- Clarified that the Frigate web UI is served over **HTTPS** on `:8971` (self-signed);
+  the app's status/Open-UI use `https://`.
+
 ## v1.1.0
 
 Validated end-to-end on a live camera (Frigate in Apple `container` → ANE detector →
