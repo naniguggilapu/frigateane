@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.1.2
+
+### Fixed
+- **Duplicate camera keys crashed Frigate.** Adding two cameras with the same id
+  produced two `camera:` keys in `config.yaml`, which Frigate rejects
+  (`ruamel.yaml DuplicateKeyError`) — the container stayed "running" but the web server
+  (NGINX) exited, so the UI showed *connection failed*. The generator now guarantees
+  **unique camera keys** (duplicates get `_2`, `_3`, …), new cameras get a unique default
+  id, and cameras with no stream URL are skipped. (Diagnosed from a real failing config.)
+
 ## v1.1.1
 
 Verified end-to-end on a live camera, including the Frigate web UI loading.

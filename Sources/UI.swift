@@ -336,7 +336,11 @@ final class SetupWindowController: NSWindowController {
         else if !exists { storageWarn.stringValue = "⚠︎ Path does not exist / drive not mounted."; storageWarn.textColor = .systemOrange }
         else { storageWarn.stringValue = "✓ Available."; storageWarn.textColor = .systemGreen }
     }
-    @objc private func addCamera() { appendCamera(CameraConfig()) }
+    @objc private func addCamera() {
+        var cam = CameraConfig()
+        cam.name = "camera\(cameraRows.count + 1)"   // unique default id
+        appendCamera(cam)
+    }
     private func appendCamera(_ cam: CameraConfig) {
         let row = CameraRow(cam)
         row.onRemove = { [weak self, weak row] in

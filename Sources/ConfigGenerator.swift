@@ -41,10 +41,13 @@ enum ConfigGenerator {
             s += "  base_url: \(c.localAI.baseURL)\n  model: \(c.localAI.model)\n\n"
         }
 
+        // Unique YAML key per camera (prevents Frigate's DuplicateKeyError).
+        let names = uniqueNames(c.cameras)
+
         // go2rtc restreams (RTSP creds injected if provided)
         s += "go2rtc:\n  streams:\n"
-        for cam in c.cameras {
-            let nm = safeName(cam.name)
+        for (i, cam) in c.cameras.enumerated() {
+            let nm = names[i]
             let main = withCreds(cam.streamURL, cam.rtspUser, cam.rtspPassword)
             let sub = withCreds(cam.subStreamURL, cam.rtspUser, cam.rtspPassword)
             if !cam.streamURL.isEmpty {
@@ -62,7 +65,8 @@ enum ConfigGenerator {
             s += "  # No cameras configured yet — add them in the setup wizard.\n"
         }
         for (i, cam) in c.cameras.enumerated() {
-            let nm = safeName(cam.name)
+            if cam.streamURL.isEmpty { continue }   // skip incomplete cameras (no main stream)
+            let nm = names[i]
             let sub = cam.subStreamURL.isEmpty ? nm : "\(nm)_sub"
             let order = cam.uiOrder > 0 ? cam.uiOrder : (i + 1)
             s += "  \(nm):\n"
@@ -93,6 +97,19 @@ enum ConfigGenerator {
         }
         s += "\nversion: 0.17-0\n"
         return s
+    }
+
+    /// Unique, safe YAML key per camera (Frigate rejects duplicate camera keys).
+    /// Duplicates get _2, _3, … suffixes.
+    private static func uniqueNames(_ cams: [CameraConfig]) -> [String] {
+        var seen = Set<String>(), out: [String] = []
+        for cam in cams {
+            let base = safeName(cam.name)
+            var name = base, n = 2
+            while seen.contains(name) { name = "\(base)_\(n)"; n += 1 }
+            seen.insert(name); out.append(name)
+        }
+        return out
     }
 
     /// Camera names become YAML keys + restream ids — must be safe (no spaces).

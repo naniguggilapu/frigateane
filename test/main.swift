@@ -1,13 +1,15 @@
-// Headless test of ConfigGenerator (compiled with Config.swift + ConfigGenerator.swift).
+// Headless test: two cameras with the SAME name must produce unique YAML keys.
 import Foundation
 
 var c = AppConfig()
-c.storagePath = "/Volumes/CCTV/recordings"
-var cam = CameraConfig()
-cam.name = "front door"; cam.friendlyName = "Front Door"; cam.uiOrder = 2
-cam.streamURL = "rtsp://10.0.0.5:554/main"; cam.subStreamURL = "rtsp://10.0.0.5:554/sub"
-cam.rtspUser = "admin"; cam.rtspPassword = "p@ss/word"
-cam.trackedObjects = ["person", "car"]; cam.detectFPS = 8
-c.cameras = [cam]
+c.storagePath = "/tmp/rec"
+var a = CameraConfig(); a.name = "camera"; a.streamURL = "rtsp://10.0.0.5:554/a"
+var b = CameraConfig(); b.name = "camera"; b.streamURL = "rtsp://10.0.0.5:554/b"
+var empty = CameraConfig(); empty.name = "blank"; empty.streamURL = ""   // should be skipped
+c.cameras = [a, b, empty]
 
-print(ConfigGenerator.frigateYAML(c))
+let yaml = ConfigGenerator.frigateYAML(c)
+print(yaml)
+print("=== camera-key count ===")
+let keys = yaml.split(separator: "\n").filter { $0.hasPrefix("  ") && $0.hasSuffix(":") && !$0.contains(" ") }
+print(keys.joined(separator: " "))
