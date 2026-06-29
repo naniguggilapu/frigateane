@@ -20,10 +20,16 @@ the whole stack — MQTT / Home Assistant, recordings storage, cameras, and mode
 
 ## Why
 
-Frigate's stock detectors don't use Apple's Neural Engine. This project runs YOLO
-via ONNX Runtime's **CoreML execution provider** (`CPUAndNeuralEngine`) in a small
-Python ZMQ server, and ships a native Swift app that supervises it and orchestrates
-Frigate (running in Apple's `container` runtime).
+Frigate's stock detectors don't use Apple's Neural Engine. The community already worked
+out how to bridge them — running a YOLO ONNX model through ONNX Runtime's **CoreML
+execution provider** in a small Python ZMQ server that Frigate (in Apple's `container`
+runtime) talks to. That setup is powerful but entirely manual: shell scripts, `pf` NAT
+rules, launchd plists, and hand-edited YAML.
+
+**This project turns that manual setup into a native macOS app** — a one-click setup
+wizard, dashboard, config generator, and orchestrator wrapped around the same
+Apple-Silicon ZMQ detector approach. See [Credits](#credits) for the upstream work this
+builds on.
 
 ## Architecture
 
@@ -136,9 +142,24 @@ Contributions are welcome — issues, feature ideas, and pull requests alike.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
+## Credits
+
+This app builds directly on prior community work, both MIT-licensed:
+
+- **[frigate-nvr/apple-silicon-detector](https://github.com/frigate-nvr/apple-silicon-detector)**
+  — the Apple-Silicon ZMQ detector for Frigate. The bundled detector engine
+  (`engine/detector/`) is derived from this project, which makes the Neural Engine path possible.
+- **[harb70's "Frigate on Apple Container" how-to](https://gist.github.com/harb70/0ca2fa85b70b242575d8c050a2a66ada)**
+  — the manual setup (container launch, `pf` NAT rules, launchd services, config layout)
+  that this app automates. The networking templates and orchestration follow that guide.
+
+This project's own contribution is the **native macOS app** around that approach: the
+SwiftUI/AppKit setup wizard, dashboard, config generator, orchestrator, connection tests,
+and portable-Python packaging.
+
 ## Acknowledgements
 
-This project stands on excellent open-source work:
+This project also stands on excellent open-source work:
 
 - **[Frigate](https://frigate.video)** by Blake Blackshear and contributors — the NVR this plugs into.
 - **[ONNX Runtime](https://onnxruntime.ai)** and its **CoreML execution provider** — the bridge to the Apple Neural Engine.

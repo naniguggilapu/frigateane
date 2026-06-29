@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Derived from frigate-nvr/apple-silicon-detector (MIT). See CREDITS.md.
 """Frigate ZMQ detector server — runs YOLO ONNX on Apple Silicon (CoreML / ANE).
 
 Implements Frigate's zmq_ipc REQ/REP protocol:
