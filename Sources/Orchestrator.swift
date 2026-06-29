@@ -258,12 +258,24 @@ final class Orchestrator {
         }
     }
 
+    /// Copy the model into the Frigate config dir's model_cache.
+    /// NOTE: must be a real copy, not a symlink — the config dir is bind-mounted
+    /// into the container, and a symlink would point outside it (broken in-container).
     private func linkModelCache() {
-        let res = Bundle.main.resourceURL!.appendingPathComponent("engine/models")
-        let dest = store.frigateConfigDir.appendingPathComponent("model_cache")
+        let src = Bundle.main.resourceURL!.appendingPathComponent("engine/models")
+        let destDir = store.frigateConfigDir.appendingPathComponent("model_cache")
         let fm = FileManager.default
-        if !fm.fileExists(atPath: dest.path) {
-            try? fm.createSymbolicLink(at: dest, withDestinationURL: res)
+        // Remove any stale symlink left by older versions.
+        if let isSym = try? destDir.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink, isSym {
+            try? fm.removeItem(at: destDir)
+        }
+        try? fm.createDirectory(at: destDir, withIntermediateDirectories: true)
+        let model = store.config.yolo.modelFile
+        let srcFile = src.appendingPathComponent(model)
+        let destFile = destDir.appendingPathComponent(model)
+        if fm.fileExists(atPath: srcFile.path) {
+            try? fm.removeItem(at: destFile)
+            try? fm.copyItem(at: srcFile, to: destFile)
         }
     }
 }
