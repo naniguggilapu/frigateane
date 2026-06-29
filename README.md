@@ -14,9 +14,11 @@ the **Apple Neural Engine (ANE)** and gives you a one-window setup + dashboard f
 the whole stack — MQTT / Home Assistant, recordings storage, cameras, and models.
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="Frigate ANE Detector dashboard — stack status, ANE detector, and live logs" width="660">
+  <img src="docs/wizard-cameras.png" alt="Setup wizard — Cameras tab" width="430">
+  &nbsp;&nbsp;
+  <img src="docs/dashboard.png" alt="Dashboard — detector running on the Apple Neural Engine" width="430">
 </p>
-<p align="center"><sub>Dashboard — stack status, ANE detector throughput, and live logs.</sub></p>
+<p align="center"><sub>Left: the one-window setup wizard (cameras, with per-camera streams, login, objects, FPS). &nbsp; Right: the dashboard — stack status, the detector live on the Apple Neural Engine (CoreML), and one-click controls including admin-password show/reset.</sub></p>
 
 ## Why
 
@@ -100,14 +102,20 @@ ultralytics) if one isn't present — so the bundled engine runs on any Apple-Si
    - **MQTT** — broker host/port/user/password.
    - **Home Assistant** — toggle MQTT auto-discovery.
    - **Storage** — pick a *mounted* drive/folder for recordings (the app warns if it's missing).
-   - **Cameras** — add RTSP main/sub streams; set retention (continuous / event days).
+   - **Cameras** — give each camera a unique **id** + optional display name, paste the
+     RTSP **main** (record) / **sub** (detect) streams, optional RTSP **user/password**
+     (injected for you), tracked objects, FPS, and UI order. *Zones/YAML…* for advanced.
    - **Models** — choose the YOLO `.onnx` (runs on the ANE); optionally enable a local
      AI vision model via Ollama for scene descriptions.
 3. **Save & Generate Config** writes `config.yaml` + a guarded `start-frigate.sh` to
    `~/Library/Application Support/FrigateANE/`.
-4. On the **Dashboard**, **Start All** ensures the container system is up, pulls the
-   Frigate image if needed, and starts Frigate + the ANE detector. Open the Frigate
-   UI at `http://localhost:8971`.
+4. On the **Dashboard**, **Start All** ensures the container system + kernel are up,
+   pulls the Frigate image if needed, and starts Frigate + the ANE detector. Then
+   **Open Frigate UI** → `https://localhost:8971` (it's HTTPS with a self-signed cert,
+   so accept the warning the first time).
+5. Frigate creates an **admin** user with a random password on first start. Click
+   **Show Admin Password** to read it from the logs, or **Reset Admin Password** to
+   generate a new one.
 
 Settings live in `~/Library/Application Support/FrigateANE/config.json`. No secrets
 are committed to the repo.
