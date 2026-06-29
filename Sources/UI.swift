@@ -57,6 +57,10 @@ final class Sparkline: NSView {
     }
 }
 
+/// Flipped container so scroll content lays out top-to-bottom (AppKit views are
+/// bottom-origin by default, which makes short content sit at the bottom).
+final class FlippedView: NSView { override var isFlipped: Bool { true } }
+
 // MARK: - Camera row
 
 final class CameraRow: NSView {
@@ -257,12 +261,13 @@ final class SetupWindowController: NSWindowController {
     private func camerasView() -> NSView {
         camerasStack.orientation = .vertical; camerasStack.alignment = .leading; camerasStack.spacing = 4
         let add = NSButton(title: "+ Add camera", target: self, action: #selector(addCamera)); add.bezelStyle = .rounded
-        let scroll = NSScrollView(); let doc = NSView(); doc.translatesAutoresizingMaskIntoConstraints = false
+        let scroll = NSScrollView(); let doc = FlippedView(); doc.translatesAutoresizingMaskIntoConstraints = false
         doc.addSubview(camerasStack); camerasStack.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             camerasStack.topAnchor.constraint(equalTo: doc.topAnchor),
             camerasStack.leadingAnchor.constraint(equalTo: doc.leadingAnchor),
             camerasStack.trailingAnchor.constraint(equalTo: doc.trailingAnchor),
+            camerasStack.bottomAnchor.constraint(equalTo: doc.bottomAnchor),   // drives doc height
             doc.widthAnchor.constraint(equalToConstant: 690),
         ])
         scroll.documentView = doc; scroll.hasVerticalScroller = true

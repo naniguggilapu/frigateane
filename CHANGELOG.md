@@ -6,6 +6,10 @@ Validated end-to-end on a live camera (Frigate in Apple `container` → ANE dete
 real-time inference), and hardened from what that testing exposed.
 
 ### Fixed
+- **Setup wizard — Add Camera**: clicking *Add camera* now actually shows the camera
+  row. The camera list's scroll view collapsed to zero height (missing bottom
+  constraint), so rows were added but invisible; the list is also flipped so rows stack
+  top-down. (Verified by driving the live UI.)
 - **Model cache**: the model is now **copied** into the Frigate config dir instead of
   symlinked. The config dir is bind-mounted into the container, so a symlink pointed
   outside it and was broken in-container — Frigate couldn't load the model and detection
