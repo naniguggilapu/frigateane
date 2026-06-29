@@ -17,9 +17,13 @@ struct HAConfig: Codable {
 
 struct CameraConfig: Codable, Identifiable {
     var id = UUID()
-    var name = "camera"
+    var name = "camera"                  // YAML key (sanitized); short id
+    var friendlyName = ""                // display alias in Frigate UI (optional)
     var streamURL = ""                   // main / record stream (rtsp://…)
     var subStreamURL = ""                // detect stream (lower res); optional
+    var rtspUser = ""                    // optional creds injected into the URLs
+    var rtspPassword = ""
+    var uiOrder = 0                      // order in the Frigate UI (0 = auto)
     var detect = true
     var record = true
     // advanced (all optional, backward-compatible)
@@ -30,7 +34,7 @@ struct CameraConfig: Codable, Identifiable {
     var extraYAML = ""                   // power-user YAML appended under the camera
 
     enum CodingKeys: String, CodingKey {
-        case id, name, streamURL, subStreamURL, detect, record
+        case id, name, friendlyName, streamURL, subStreamURL, rtspUser, rtspPassword, uiOrder, detect, record
         case trackedObjects, detectFPS, detectWidth, detectHeight, extraYAML
     }
     init() {}
@@ -38,8 +42,12 @@ struct CameraConfig: Codable, Identifiable {
         let c = try d.container(keyedBy: CodingKeys.self)
         id = (try? c.decode(UUID.self, forKey: .id)) ?? UUID()
         name = (try? c.decode(String.self, forKey: .name)) ?? "camera"
+        friendlyName = (try? c.decode(String.self, forKey: .friendlyName)) ?? ""
         streamURL = (try? c.decode(String.self, forKey: .streamURL)) ?? ""
         subStreamURL = (try? c.decode(String.self, forKey: .subStreamURL)) ?? ""
+        rtspUser = (try? c.decode(String.self, forKey: .rtspUser)) ?? ""
+        rtspPassword = (try? c.decode(String.self, forKey: .rtspPassword)) ?? ""
+        uiOrder = (try? c.decode(Int.self, forKey: .uiOrder)) ?? 0
         detect = (try? c.decode(Bool.self, forKey: .detect)) ?? true
         record = (try? c.decode(Bool.self, forKey: .record)) ?? true
         trackedObjects = (try? c.decode([String].self, forKey: .trackedObjects)) ?? ["person"]

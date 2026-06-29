@@ -106,7 +106,11 @@ final class Orchestrator {
                 st.notes.append("Container NAT networking not installed — the container may not reach LAN cameras/MQTT. Use “Install Networking”.")
             }
             if st.frigateRunning {
-                st.frigateHealthy = Shell.run("curl -s -o /dev/null -w '%{http_code}' --max-time 4 http://localhost:8971 | grep -qE '200|401|302' && echo ok || echo no", timeout: 8).out.contains("ok")
+                // Frigate 0.17 serves the UI over HTTPS on 8971 (self-signed) — any
+                // HTTP status back means it's up (a plain http:// probe returns 400).
+                let code = Shell.run("curl -sk -o /dev/null -w '%{http_code}' --max-time 4 https://localhost:8971 || true", timeout: 8)
+                    .out.trimmingCharacters(in: .whitespacesAndNewlines)
+                st.frigateHealthy = !code.isEmpty && code != "000"
             }
             if Shell.which("ollama") != nil {
                 st.ollamaInstalled = true
@@ -176,9 +180,21 @@ final class Orchestrator {
             if ok {
                 _ = Shell.run("container system start 2>&1", timeout: 30)
                 self.log("Container system started.")
+                self.ensureKernel(force: true)
             }
             _ = Shell.run("rm -f '\(pkg)'", timeout: 5)
             DispatchQueue.main.async { done(ok) }
+        }
+    }
+
+    /// Apple `container` needs a default kernel configured before it can run a
+    /// container (fresh installs error: "default kernel not configured for arm64").
+    /// Installs the recommended kernel. `force` always installs; otherwise only logs.
+    private func ensureKernel(force: Bool) {
+        if force {
+            self.log("Configuring container kernel (recommended)…")
+            let r = Shell.run("container system kernel set --recommended 2>&1", timeout: 300)
+            self.log(String(r.out.suffix(200)))
         }
     }
 
@@ -188,7 +204,9 @@ final class Orchestrator {
         DispatchQueue.global().async {
             do { try ConfigGenerator.writeAll(self.store) }
             catch { self.log("Failed to write config: \(error)"); DispatchQueue.main.async { done(false) }; return }
-            self.log("Wrote Frigate config + start script.")
+            self.log("Wrote Frigate config — \(self.store.config.cameras.count) camera(s).")
+            self.log("Config:  \(self.store.frigateConfigYAML.path)")
+            self.log("Storage: \(self.store.config.storagePath)")
             self.linkModelCache()
 
             // Storage guard
@@ -216,7 +234,12 @@ final class Orchestrator {
             }
 
             self.log("Starting Frigate…")
-            let r = Shell.run("bash '\(self.store.startScriptURL.path)' 2>&1", timeout: 120)
+            var r = Shell.run("bash '\(self.store.startScriptURL.path)' 2>&1", timeout: 120)
+            if r.code != 0 && r.out.lowercased().contains("kernel") {
+                self.log("No container kernel configured — installing recommended kernel, then retrying…")
+                self.ensureKernel(force: true)
+                r = Shell.run("bash '\(self.store.startScriptURL.path)' 2>&1", timeout: 120)
+            }
             self.log(r.out)
 
             // Health check: wait for the container to report running.
@@ -228,8 +251,9 @@ final class Orchestrator {
                 Thread.sleep(forTimeInterval: 2)
             }
             if healthy {
-                let ui = Shell.run("curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://localhost:8971 || true", timeout: 8).out
-                self.log("✓ Frigate running. UI http://localhost:8971 (HTTP \(ui.trimmingCharacters(in: .whitespacesAndNewlines))).")
+                let ui = Shell.run("curl -sk -o /dev/null -w '%{http_code}' --max-time 5 https://localhost:8971 || true", timeout: 8)
+                    .out.trimmingCharacters(in: .whitespacesAndNewlines)
+                self.log("✓ Frigate running. UI https://localhost:8971 (HTTP \(ui)).")
             } else {
                 self.log("⚠︎ Frigate did not report running within 30s — check logs above.")
             }

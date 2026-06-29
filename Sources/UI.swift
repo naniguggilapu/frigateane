@@ -60,13 +60,17 @@ final class Sparkline: NSView {
 // MARK: - Camera row
 
 final class CameraRow: NSView {
-    let nameF = field("camera", width: 110, placeholder: "name")
-    let mainF = field("", width: 260, placeholder: "rtsp:// main (record)")
-    let subF  = field("", width: 240, placeholder: "rtsp:// sub (detect)")
-    let objF  = field("person", width: 200, placeholder: "objects: person, dog")
-    let fpsF  = field("5", width: 50)
-    let wF    = field("320", width: 56)
-    let hF    = field("180", width: 56)
+    let nameF = field("camera", width: 100, placeholder: "id e.g. front_door")
+    let friendlyF = field("", width: 150, placeholder: "Display name (alias)")
+    let orderF = field("0", width: 40)
+    let mainF = field("", width: 420, placeholder: "rtsp://host:554/main   (record stream)")
+    let subF  = field("", width: 420, placeholder: "rtsp://host:554/sub   (detect stream, optional)")
+    let userF = field("", width: 120, placeholder: "rtsp user")
+    let passF = NSSecureTextField(string: "")
+    let objF  = field("person", width: 170, placeholder: "person, dog")
+    let fpsF  = field("5", width: 44)
+    let wF    = field("320", width: 52)
+    let hF    = field("180", width: 52)
     let rtspResult = label("", secondary: true)
     var extraYAML = ""
     var onRemove: (() -> Void)?
@@ -74,8 +78,14 @@ final class CameraRow: NSView {
     init(_ cam: CameraConfig) {
         super.init(frame: .zero)
         nameF.stringValue = cam.name
+        friendlyF.stringValue = cam.friendlyName
+        orderF.stringValue = String(cam.uiOrder)
         mainF.stringValue = cam.streamURL
         subF.stringValue = cam.subStreamURL
+        userF.stringValue = cam.rtspUser
+        passF.stringValue = cam.rtspPassword
+        passF.placeholderString = "rtsp password"
+        passF.widthAnchor.constraint(equalToConstant: 120).isActive = true
         objF.stringValue = cam.trackedObjects.joined(separator: ", ")
         fpsF.stringValue = String(cam.detectFPS)
         wF.stringValue = String(cam.detectWidth)
@@ -86,13 +96,16 @@ final class CameraRow: NSView {
         let testBtn = smallButton("Test RTSP", self, #selector(testRTSP))
         let rm = NSButton(title: "✕", target: self, action: #selector(remove)); rm.bezelStyle = .circular
 
-        let line1 = NSStackView(views: [nameF, mainF, subF, yamlBtn, rm]); line1.spacing = 6; line1.alignment = .centerY
-        let line2 = NSStackView(views: [label("track", secondary: true), objF,
-                                        label("fps", secondary: true), fpsF,
-                                        label("size", secondary: true), wF, label("×", secondary: true), hF,
-                                        testBtn, rtspResult]); line2.spacing = 6; line2.alignment = .centerY
+        func lbl(_ t: String) -> NSTextField { label(t, secondary: true) }
+        let line1 = NSStackView(views: [lbl("id"), nameF, lbl("name"), friendlyF, lbl("order"), orderF, yamlBtn, rm])
+        line1.spacing = 6; line1.alignment = .centerY
+        let line2 = NSStackView(views: [lbl("main"), mainF, testBtn, rtspResult]); line2.spacing = 6; line2.alignment = .centerY
+        let line3 = NSStackView(views: [lbl("sub"), subF]); line3.spacing = 6; line3.alignment = .centerY
+        let line4 = NSStackView(views: [lbl("login"), userF, passF,
+                                        lbl("track"), objF, lbl("fps"), fpsF,
+                                        lbl("size"), wF, lbl("×"), hF]); line4.spacing = 6; line4.alignment = .centerY
 
-        let v = NSStackView(views: [line1, line2]); v.orientation = .vertical; v.alignment = .leading; v.spacing = 4
+        let v = NSStackView(views: [line1, line2, line3, line4]); v.orientation = .vertical; v.alignment = .leading; v.spacing = 4
         let box = NSBox(); box.boxType = .custom; box.cornerRadius = 6; box.borderWidth = 1
         box.borderColor = NSColor(white: 0.5, alpha: 0.25); box.contentView = v
         v.translatesAutoresizingMaskIntoConstraints = false
@@ -134,8 +147,12 @@ final class CameraRow: NSView {
     var value: CameraConfig {
         var c = CameraConfig()
         c.name = nameF.stringValue.isEmpty ? "camera" : nameF.stringValue.replacingOccurrences(of: " ", with: "_")
+        c.friendlyName = friendlyF.stringValue
+        c.uiOrder = Int(orderF.stringValue) ?? 0
         c.streamURL = mainF.stringValue
         c.subStreamURL = subF.stringValue
+        c.rtspUser = userF.stringValue
+        c.rtspPassword = passF.stringValue
         c.trackedObjects = objF.stringValue.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         if c.trackedObjects.isEmpty { c.trackedObjects = ["person"] }
         c.detectFPS = Int(fpsF.stringValue) ?? 5
@@ -465,7 +482,7 @@ final class DashboardWindowController: NSWindowController {
     @objc private func installNetworking() { appendLog("Installing container NAT networking…\n"); orch.installNetworking { [weak self] _ in self?.refreshStack() } }
     @objc private func installRuntime() { appendLog("Installing Apple container runtime…\n"); orch.installContainerRuntime { [weak self] _ in self?.refreshStack() } }
     @objc private func toggleDetector() { engine.running ? engine.stop() : engine.start() }
-    @objc private func openUI() { NSWorkspace.shared.open(URL(string: "http://localhost:8971")!) }
+    @objc private func openUI() { NSWorkspace.shared.open(URL(string: "https://localhost:8971")!) }
     @objc private func openSetup() { (NSApp.delegate as? AppDelegate)?.showSetup() }
     @objc private func revealConfig() {
         _ = try? ConfigGenerator.writeAll(store)

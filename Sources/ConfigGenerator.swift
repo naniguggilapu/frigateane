@@ -41,15 +41,17 @@ enum ConfigGenerator {
             s += "  base_url: \(c.localAI.baseURL)\n  model: \(c.localAI.model)\n\n"
         }
 
-        // go2rtc restreams
+        // go2rtc restreams (RTSP creds injected if provided)
         s += "go2rtc:\n  streams:\n"
         for cam in c.cameras {
             let nm = safeName(cam.name)
+            let main = withCreds(cam.streamURL, cam.rtspUser, cam.rtspPassword)
+            let sub = withCreds(cam.subStreamURL, cam.rtspUser, cam.rtspPassword)
             if !cam.streamURL.isEmpty {
-                s += "    \(nm):\n      - ffmpeg:\(cam.streamURL)#video=copy#audio=copy\n"
+                s += "    \(nm):\n      - ffmpeg:\(main)#video=copy#audio=copy\n"
             }
             if !cam.subStreamURL.isEmpty {
-                s += "    \(nm)_sub:\n      - ffmpeg:\(cam.subStreamURL)#video=copy#audio=copy\n"
+                s += "    \(nm)_sub:\n      - ffmpeg:\(sub)#video=copy#audio=copy\n"
             }
         }
         s += "\n"
@@ -62,8 +64,10 @@ enum ConfigGenerator {
         for (i, cam) in c.cameras.enumerated() {
             let nm = safeName(cam.name)
             let sub = cam.subStreamURL.isEmpty ? nm : "\(nm)_sub"
+            let order = cam.uiOrder > 0 ? cam.uiOrder : (i + 1)
             s += "  \(nm):\n"
-            s += "    ui:\n      order: \(i + 1)\n"
+            if !cam.friendlyName.isEmpty { s += "    friendly_name: \"\(cam.friendlyName)\"\n" }
+            s += "    ui:\n      order: \(order)\n"
             s += "    enabled: true\n"
             s += "    ffmpeg:\n      inputs:\n"
             s += "        - path: rtsp://127.0.0.1:8554/\(nm)\n"
@@ -99,6 +103,16 @@ enum ConfigGenerator {
         while out.contains("__") { out = out.replacingOccurrences(of: "__", with: "_") }
         out = out.trimmingCharacters(in: CharacterSet(charactersIn: "_"))
         return out.isEmpty ? "camera" : out
+    }
+
+    /// Inject `user:pass@` into an rtsp URL if creds are given and not already present.
+    private static func withCreds(_ url: String, _ user: String, _ pass: String) -> String {
+        guard !user.isEmpty, let scheme = url.range(of: "://") else { return url }
+        let after = url[scheme.upperBound...]
+        if after.contains("@") { return url }           // URL already carries creds
+        let head = url[..<scheme.upperBound]
+        let enc: (String) -> String = { $0.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? $0 }
+        return "\(head)\(enc(user)):\(enc(pass))@\(after)"
     }
 
     /// The container reaches the Mac host over the Apple-container bridge.
