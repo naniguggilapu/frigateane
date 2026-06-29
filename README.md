@@ -5,7 +5,6 @@
 ![Platform](https://img.shields.io/badge/platform-macOS%20·%20Apple%20Silicon-black)
 ![Swift](https://img.shields.io/badge/Swift-5%2B-orange)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Status](https://img.shields.io/badge/status-v0.1%20preview-yellow)
 
 > Run [Frigate](https://frigate.video) object detection on Apple's Neural Engine —
 > with a one-window setup + dashboard for the whole stack.
@@ -18,10 +17,6 @@ the whole stack — MQTT / Home Assistant, recordings storage, cameras, and mode
   <img src="docs/screenshot.png" alt="Frigate ANE Detector dashboard — stack status, ANE detector, and live logs" width="660">
 </p>
 <p align="center"><sub>Dashboard — stack status, ANE detector throughput, and live logs.</sub></p>
-
-> **Status:** v0.1 — foundation. The app, setup wizard, config generator, and
-> detector engine work. Full container orchestration is wired but still being
-> hardened on live targets (see *Roadmap*).
 
 ## Why
 
@@ -41,7 +36,7 @@ Frigate (running in Apple's `container` runtime).
 │  • Supervises Python engine   │                            └────────────────────┘
 │        │                      │
 │        ▼                      │
-│  engine/ (venv)               │
+│  engine/ (bundled python)     │
 │   detector/zmq_onnx_client.py │  ── YOLO ONNX on the ANE (CoreML EP)
 │   models/yolo.onnx            │
 └──────────────────────────────┘
@@ -63,8 +58,9 @@ bash scripts/build.sh           # provisions engine, compiles, assembles the .ap
 open ~/Applications/FrigateANEDetector.app
 ```
 
-`scripts/provision_engine.sh` creates the Python venv, installs `onnxruntime` /
-`pyzmq` / `numpy`, and exports a `yolo.onnx` (via ultralytics) if one isn't present.
+`scripts/provision_engine.sh` downloads a relocatable Python (python-build-standalone),
+installs `onnxruntime` / `pyzmq` / `numpy` into it, and exports a `yolo.onnx` (via
+ultralytics) if one isn't present — so the bundled engine runs on any Apple-Silicon Mac.
 
 ## Use
 
@@ -93,18 +89,16 @@ action (Dashboard) that installs a `pf` ruleset + a `com.frigateane.nat` LaunchD
 (templates in [`networking/`](networking/)) via a single admin prompt. Start-up also
 runs a health check and waits for Frigate to report running.
 
-## Roadmap
+## Features
 
-- [x] Health checks on container start + Frigate readiness wait.
-- [x] One-click container NAT networking install.
-- [x] Connection tests — MQTT CONNECT check, detector ANE self-test, per-camera RTSP reachability.
-- [x] Launch-at-login + auto-start Frigate/detector on launch.
-- [x] Per-camera config — tracked objects, detect FPS/resolution, and advanced zones/YAML.
-- [x] Dashboard live stats — inferences/sec sparkline, auto-refreshing stack status, menubar throughput.
-- [x] **Portable bundled Python** — ships a relocatable interpreter (python-build-standalone), so the engine runs on any Apple-Silicon Mac with no Homebrew/system Python.
-- [x] Container-runtime auto-detect + guided install (checks macOS 26, installs Apple `container` from the signed `.pkg`).
-- [ ] Signed + notarized release `.dmg` (no right-click-to-open).
-- [ ] Optional CoreML `.mlpackage` detector path (no Python).
+- ANE object detection — YOLO via ONNX Runtime's CoreML execution provider.
+- Setup wizard — MQTT, Home Assistant discovery, storage path, cameras + retention, models.
+- Connection tests — MQTT CONNECT check, detector ANE self-test, per-camera RTSP reachability.
+- Per-camera config — tracked objects, detect FPS/resolution, and advanced zones/YAML.
+- Launch-at-login + auto-start Frigate/detector on launch.
+- Dashboard live stats — inferences/sec sparkline, auto-refreshing stack status, menubar throughput.
+- Portable bundled Python — relocatable interpreter, no Homebrew/system Python needed.
+- One-click container NAT networking + container-runtime detection/install.
 
 ## Signing & notarization
 
@@ -130,7 +124,6 @@ ticket. Requires an Apple Developer Program membership.
 - The app is ad-hoc signed, not notarized — first launch needs right-click → **Open**.
 - Running Frigate itself requires macOS 26 + Apple `container` (the ANE detector works
   independently on macOS 13+).
-- onnxruntime is pinned to 1.26.0 — 1.27.x has a CoreML regression on this YOLO model.
 
 ## Contributing
 
@@ -141,9 +134,7 @@ Contributions are welcome — issues, feature ideas, and pull requests alike.
 3. Keep changes focused; match the existing Swift style (programmatic AppKit, no storyboards).
 4. Open a PR describing the change and how you tested it.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for details. Good first issues live in the
-[Roadmap](#roadmap) above — the MQTT/detector "test connection" buttons and per-camera
-zone editing are great starting points.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## Acknowledgements
 
@@ -159,11 +150,8 @@ This project stands on excellent open-source work:
 
 ## Thanks
 
-Built by **[@naniguggilapu](https://github.com/naniguggilapu)**, pair-developed with
-**Claude (Anthropic)** — which helped design the architecture, write the Swift app and
-Python detector, generate the Frigate config layer, and wire up the container
-orchestration. Thanks to the Frigate community for the detector-plugin protocol that
-made the Apple Neural Engine path possible.
+Built by **[@naniguggilapu](https://github.com/naniguggilapu)**. Thanks to the Frigate
+community for the detector-plugin protocol that made the Apple Neural Engine path possible.
 
 ## License
 
