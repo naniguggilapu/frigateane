@@ -322,7 +322,7 @@ final class Orchestrator {
             let out = Shell.run("container logs frigate 2>&1 | grep -iE 'user: admin|password: ' | tail -8", timeout: 12)
                 .out.trimmingCharacters(in: .whitespacesAndNewlines)
             if out.isEmpty {
-                self.log("No admin-password line found in the logs (it may already be set, or auth disabled). Use “Reset Admin Password”.")
+                self.log("No password in the current logs — Frigate only prints it once (first start of this container). Click “Reset Admin Password” to generate a fresh one.")
             } else {
                 self.log("Frigate admin login (from logs):")
                 self.log(out)
@@ -350,17 +350,27 @@ final class Orchestrator {
                 if Shell.run("container list 2>/dev/null | grep -q 'frigate.*running' && echo y || echo n", timeout: 8).out.contains("y") { up = true; break }
                 Thread.sleep(forTimeInterval: 2)
             }
-            Thread.sleep(forTimeInterval: 5)   // let the password log line appear
-            let out = Shell.run("container logs frigate 2>&1 | grep -iE 'user: admin|password: ' | tail -8", timeout: 12)
-                .out.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Frigate prints the admin password box during auth init, which is often
+            // 10-25s AFTER the container reports "running" — poll for it (up to ~50s)
+            // instead of grepping once and missing it.
+            self.log("Waiting for the new password (Frigate is finishing startup)…")
+            var out = ""
+            for _ in 0..<16 {
+                out = Shell.run("container logs frigate 2>&1 | grep -iE 'user: admin|password: ' | tail -8", timeout: 12)
+                    .out.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !out.isEmpty { break }
+                Thread.sleep(forTimeInterval: 3)
+            }
             // Clear the flag so the next restart doesn't reset again.
             self.store.update { $0.resetAdminPassword = false }
             _ = try? ConfigGenerator.writeAll(self.store)
             if up && !out.isEmpty {
                 self.log("New admin login:")
                 self.log(out)
+            } else if up {
+                self.log("Reset done, but the password didn't appear within ~50s. Wait a moment, then click “Show Admin Password”, or run: container logs frigate | grep -i password")
             } else {
-                self.log("Reset done, but no password line captured — check logs above.")
+                self.log("Reset: Frigate didn't come back up — check the log above.")
             }
             DispatchQueue.main.async { done(up) }
         }

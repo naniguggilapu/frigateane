@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.2.2
+
+### Fixed
+- **Admin password never appeared** ([#1](https://github.com/naniguggilapu/frigateane/issues/1)).
+  Frigate prints the admin password box 10-25s *after* the container reports "running", so the
+  single log grep ran too early and missed it. **Reset Admin Password** now polls the logs for
+  up to ~50s. Clearer messages too: *Show* explains the password is only printed once per
+  container; *Reset* points you to `container logs frigate | grep -i password` if it still can't read it.
+
 ## v1.2.1
 
 ### Fixed
