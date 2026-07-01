@@ -15,16 +15,16 @@ enum ConfigGenerator {
         if c.mqtt.enabled && !c.mqtt.host.isEmpty {
             s += "mqtt:\n"
             s += "  enabled: true\n"
-            s += "  host: \(c.mqtt.host)\n"
+            s += "  host: \(yamlQuoted(c.mqtt.host))\n"
             s += "  port: \(c.mqtt.port)\n"
-            s += "  user: \(c.mqtt.user)\n"
-            s += "  password: \"\(c.mqtt.password)\"\n\n"
+            s += "  user: \(yamlQuoted(c.mqtt.user))\n"
+            s += "  password: \(yamlQuoted(c.mqtt.password))\n\n"
         } else {
             s += "mqtt:\n  enabled: false\n\n"
         }
 
         // Detector → our ANE ZMQ server on the Mac host
-        let hostIP = macHostForContainer(c.detectorEndpoint)
+        let hostIP = macHostForContainer()
         s += "detectors:\n  apple_silicon:\n    type: zmq\n    endpoint: tcp://\(hostIP):5555\n    request_timeout_ms: 2000\n\n"
 
         // Model
@@ -70,7 +70,7 @@ enum ConfigGenerator {
             let sub = cam.subStreamURL.isEmpty ? nm : "\(nm)_sub"
             let order = cam.uiOrder > 0 ? cam.uiOrder : (i + 1)
             s += "  \(nm):\n"
-            if !cam.friendlyName.isEmpty { s += "    friendly_name: \"\(cam.friendlyName)\"\n" }
+            if !cam.friendlyName.isEmpty { s += "    friendly_name: \(yamlQuoted(cam.friendlyName))\n" }
             s += "    ui:\n      order: \(order)\n"
             s += "    enabled: true\n"
             s += "    ffmpeg:\n      inputs:\n"
@@ -133,9 +133,20 @@ enum ConfigGenerator {
     }
 
     /// The container reaches the Mac host over the Apple-container bridge.
-    private static func macHostForContainer(_ endpoint: String) -> String {
-        // default Apple container host gateway
+    /// This is a fixed constant (Apple `container`'s default network always gives
+    /// the host this gateway address on the bridge) — not derived from app
+    /// settings, so it takes no parameters.
+    private static func macHostForContainer() -> String {
         return "192.168.64.1"
+    }
+
+    /// Escape + quote a string for safe embedding as a YAML scalar (handles
+    /// embedded quotes/backslashes and special characters like `:`/`#`).
+    private static func yamlQuoted(_ s: String) -> String {
+        let escaped = s
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        return "\"\(escaped)\""
     }
 
     /// Build the container launch script using the chosen storage path + config dir.

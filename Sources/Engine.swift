@@ -17,6 +17,7 @@ final class Engine {
     var onLog: ((String) -> Void)?
     var onState: (() -> Void)?
 
+    private var rapidFailures = 0        // consecutive immediate exits (e.g. port in use)
     private let pythonURL: URL
     private let scriptPath: String
     private let workdir: URL
@@ -55,13 +56,28 @@ final class Engine {
         p.terminationHandler = { [weak self] proc in
             DispatchQueue.main.async {
                 guard let self = self else { return }
+                // A previous process's terminationHandler can fire after a new one has
+                // already been started (e.g. stop() immediately followed by start()).
+                // Ignore stale callbacks so they don't clobber state for the current process.
+                guard self.process === proc else { return }
                 self.running = false
                 self.onLog?("\n— engine exited (\(proc.terminationStatus)) —\n")
                 self.onState?()
-                if self.autoRestart && proc.terminationStatus != 0 {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        if !self.running { self.start() }
-                    }
+                guard self.autoRestart && proc.terminationStatus != 0 else { return }
+                // Detect a crash loop: if the process dies within a few seconds it's
+                // usually a startup failure (e.g. port 5555 already in use). Back off
+                // after a few of those instead of restarting forever.
+                let ranBriefly = (self.startedAt.map { Date().timeIntervalSince($0) < 4 }) ?? true
+                self.rapidFailures = ranBriefly ? self.rapidFailures + 1 : 0
+                if self.rapidFailures >= 3 {
+                    self.rapidFailures = 0
+                    self.provider = "not running"
+                    self.onState?()
+                    self.onLog?("Detector keeps exiting immediately — is \(self.endpoint) already in use? Auto-restart paused; use “Start/Stop Detector” to retry.\n")
+                    return
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    if !self.running { self.start() }
                 }
             }
         }
@@ -90,6 +106,7 @@ final class Engine {
         onLog?(chunk)
         for raw in chunk.split(separator: "\n") {
             let line = String(raw)
+            if line.contains("listening") { rapidFailures = 0 }   // healthy start
             if line.contains("Loaded ") {
                 if let m = match(line, #"Loaded (\S+) in"#) { modelName = m }
                 aneActive = line.contains("CoreML")

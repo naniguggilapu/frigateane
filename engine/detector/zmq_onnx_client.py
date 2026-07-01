@@ -222,9 +222,15 @@ def main():
             print("SELFTEST FAIL: no model loaded")
             sys.exit(2)
         shape = det.session.get_inputs()[0].shape
-        dims = [int(d) if isinstance(d, int) else 1 for d in shape]
-        if len(dims) == 4:
-            dims = [1, dims[1] if dims[1] else 3, dims[2] if dims[2] else 320, dims[3] if dims[3] else 320]
+        # Symbolic (non-int) dims -> None, so the fallback below actually fires
+        # for them. (A prior version defaulted straight to 1, which meant the
+        # "or 3" / "or 320" fallbacks below were dead code — any model with a
+        # symbolic shape got a degenerate 1-channel/1x1 input and crashed.)
+        raw_dims = [d if isinstance(d, int) else None for d in shape]
+        if len(raw_dims) == 4:
+            dims = [1, raw_dims[1] or 3, raw_dims[2] or 320, raw_dims[3] or 320]
+        else:
+            dims = [d or 1 for d in raw_dims]
         x = np.random.rand(*dims).astype(np.float32)
         # warmup + timed
         det.infer(x)

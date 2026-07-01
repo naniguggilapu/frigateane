@@ -102,7 +102,7 @@ final class Orchestrator {
                 let code = Shell.run("curl -sk -o /dev/null -w '%{http_code}' --max-time 3 \(scheme)://\(h):\(port) || true", timeout: 6)
                     .out.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !code.isEmpty && code != "000" {
-                    DispatchQueue.main.async { done(true, "https://\(h):10443") }
+                    DispatchQueue.main.async { done(true, "\(scheme)://\(h):\(port)") }
                     return
                 }
             }
@@ -394,9 +394,15 @@ final class Orchestrator {
         let model = store.config.yolo.modelFile
         let srcFile = src.appendingPathComponent(model)
         let destFile = destDir.appendingPathComponent(model)
-        if fm.fileExists(atPath: srcFile.path) {
+        guard fm.fileExists(atPath: srcFile.path) else {
+            self.log("✕ Model file missing from app bundle: \(srcFile.path) — Frigate will fail to load the model.")
+            return
+        }
+        do {
             try? fm.removeItem(at: destFile)
-            try? fm.copyItem(at: srcFile, to: destFile)
+            try fm.copyItem(at: srcFile, to: destFile)
+        } catch {
+            self.log("✕ Failed to copy model into model_cache: \(error)")
         }
     }
 }

@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.2.1
+
+### Fixed
+- **Detector crash-loop** — if `tcp://…:5555` was already in use (e.g. a stale detector),
+  the engine restarted forever and spammed the log. It now backs off after a few immediate
+  failures and tells you the port is busy; "Start/Stop Detector" retries.
+- **Overlapping status probes** — the dashboard timer could launch a new stack probe
+  (multiple `container`/`curl` calls) before the previous finished. Probes are now guarded
+  so only one runs at a time, the interval is 5s, and probing pauses while the window is hidden.
+
 ## v1.2.0
 
 ### Added

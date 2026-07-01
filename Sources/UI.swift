@@ -350,7 +350,13 @@ final class SetupWindowController: NSWindowController {
     }
     @objc private func addCamera() {
         var cam = CameraConfig()
-        cam.name = "camera\(cameraRows.count + 1)"   // unique default id
+        // Pick a default id that isn't already in use — camera count alone can
+        // collide after a row in the middle has been removed.
+        let used = Set(cameraRows.map { $0.nameF.stringValue })
+        var n = cameraRows.count + 1
+        var name = "camera\(n)"
+        while used.contains(name) { n += 1; name = "camera\(n)" }
+        cam.name = name
         appendCamera(cam)
     }
     private func appendCamera(_ cam: CameraConfig) {
@@ -439,6 +445,7 @@ final class DashboardWindowController: NSWindowController {
     private let stackLabel = label("stack: checking…")
     private let spark = Sparkline()
     private var timer: Timer?
+    private var detecting = false        // guard against overlapping stack probes
 
     init(engine: Engine) {
         self.engine = engine
@@ -452,7 +459,7 @@ final class DashboardWindowController: NSWindowController {
         engine.onLog = { [weak self] s in self?.appendLog(s) }
         orch.onProgress = { [weak self] s in self?.appendLog(s) }
         refreshDetector(); refreshStack()
-        timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in self?.tick() }
+        timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in self?.tick() }
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -496,6 +503,7 @@ final class DashboardWindowController: NSWindowController {
     }
 
     private func tick() {
+        guard window?.isVisible == true else { return }   // don't probe while hidden
         spark.push(engine.fps)
         refreshStack()
     }
@@ -504,8 +512,11 @@ final class DashboardWindowController: NSWindowController {
             engine.running ? "running" : "stopped", engine.provider, engine.fps)
     }
     private func refreshStack() {
+        if detecting { return }          // don't stack up probes if one is still running
+        detecting = true
         orch.detect { [weak self] st in
             guard let self = self else { return }
+            self.detecting = false
             var parts: [String] = []
             parts.append("macOS \(st.macOSMajor)\(st.macOSCompatible ? "" : " (needs 26+)")")
             parts.append("container: \(st.containerCLI ? (st.containerVersion ?? "✓") : "✕")")
@@ -559,7 +570,8 @@ final class DashboardWindowController: NSWindowController {
     }
     @objc private func openSetup() { (NSApp.delegate as? AppDelegate)?.showSetup() }
     @objc private func revealConfig() {
-        _ = try? ConfigGenerator.writeAll(store)
+        do { try ConfigGenerator.writeAll(store) }
+        catch { appendLog("✕ Failed to write config: \(error)\n"); return }
         NSWorkspace.shared.activateFileViewerSelecting([store.frigateConfigYAML])
     }
     @objc private func copyConfig() {
