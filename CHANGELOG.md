@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.3.0
+
+### Added
+- **Adopt an existing (manual) setup.** Already did the gist-style manual install? On first
+  launch the app now offers to **import your existing `~/frigate/config/config.yaml`** — it
+  pulls in your cameras (main/sub RTSP streams, tracked objects, FPS, size, order), MQTT, and
+  model settings, so you don't re-enter anything. There's also an **"Import existing config…"**
+  button in the Cameras tab for any Frigate `config.yaml`.
+- **Conflict cleanup.** If the old manual launch agents (`com.frigate.detector`, `…watch`, etc.)
+  are still running, the app offers to disable them so it can manage the detector/stack itself.
+
 ## v1.2.2
 
 ### Fixed

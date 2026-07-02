@@ -101,7 +101,9 @@ ultralytics) if one isn't present — so the bundled engine runs on any Apple-Si
 
 ## Use
 
-1. Launch the app — the **Setup** wizard opens on first run.
+1. Launch the app — the **Setup** wizard opens on first run. *(If you already have a manual
+   setup, it offers to import your existing `~/frigate/config/config.yaml` — accept and skip
+   re-entering cameras/MQTT.)*
 2. Fill in the tabs:
    - **MQTT** — broker host/port/user/password.
    - **Home Assistant** — toggle MQTT auto-discovery.
@@ -137,6 +139,10 @@ runs a health check and waits for Frigate to report running.
 ## Features
 
 **Setup wizard** (one window, no terminal)
+- **Adopt an existing setup** — already did the manual/gist install? On first launch the app
+  offers to **import your existing `~/frigate/config/config.yaml`** (cameras, MQTT, model), and
+  can disable the old manual launch agents that would conflict. There's also an
+  *"Import existing config…"* button on the Cameras tab.
 - MQTT, Home Assistant discovery, and a recordings **storage** picker (warns if the drive isn't mounted).
 - **Cameras** — unique id + display alias, RTSP **main/sub** streams, RTSP **user/password**
   (injected for you), tracked objects, detect FPS/resolution, UI order, and per-camera zones/YAML.

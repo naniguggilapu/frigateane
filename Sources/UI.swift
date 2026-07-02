@@ -265,6 +265,8 @@ final class SetupWindowController: NSWindowController {
     private func camerasView() -> NSView {
         camerasStack.orientation = .vertical; camerasStack.alignment = .leading; camerasStack.spacing = 4
         let add = NSButton(title: "+ Add camera", target: self, action: #selector(addCamera)); add.bezelStyle = .rounded
+        let importBtn = NSButton(title: "Import existing config…", target: self, action: #selector(importExisting)); importBtn.bezelStyle = .rounded
+        let addRow = NSStackView(views: [add, importBtn]); addRow.spacing = 10
         let scroll = NSScrollView(); let doc = FlippedView(); doc.translatesAutoresizingMaskIntoConstraints = false
         doc.addSubview(camerasStack); camerasStack.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -285,7 +287,7 @@ final class SetupWindowController: NSWindowController {
         return vstack([
             label("Cameras", bold: true),
             label("Main = recording, Sub = detection. Per-camera objects, fps, size; “Zones/YAML…” for advanced.", secondary: true),
-            add, scroll, ret, scryptedRow, scryptedResult,
+            addRow, scroll, ret, scryptedRow, scryptedResult,
         ])
     }
     private func modelsView() -> NSView {
@@ -387,6 +389,27 @@ final class SetupWindowController: NSWindowController {
     @objc private func openScryptedTapped() {
         let host = scryptedField.stringValue.isEmpty ? "localhost" : scryptedField.stringValue
         if let u = URL(string: "https://\(host):10443") { NSWorkspace.shared.open(u) }
+    }
+    @objc private func importExisting() {
+        let p = NSOpenPanel(); p.canChooseFiles = true; p.canChooseDirectories = false; p.allowsMultipleSelection = false
+        let def = orch.existingConfigPath
+        if FileManager.default.fileExists(atPath: def) {
+            p.directoryURL = URL(fileURLWithPath: (def as NSString).deletingLastPathComponent)
+        }
+        guard p.runModal() == .OK, let url = p.url else { return }
+        orch.importFrigateConfig(from: url.path) { [weak self] ok, n in
+            let a = NSAlert()
+            a.messageText = ok ? "Imported \(n) camera(s) + settings." : "Import failed."
+            if ok { a.informativeText = "Review the tabs, set your storage folder, then Save & Generate Config." }
+            a.runModal()
+            if ok { self?.reloadFromStore() }
+        }
+    }
+    /// Re-populate every field + camera row from the current stored config (after an import).
+    private func reloadFromStore() {
+        for row in cameraRows { camerasStack.removeView(row) }
+        cameraRows.removeAll()
+        loadFromConfig()
     }
 
     private func loadFromConfig() {
@@ -613,10 +636,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             showDashboard()
             if engine.isInstalled { engine.start() }
             if cfg.autostartFrigate { orch.startAll { _ in } }
+        } else if orch.hasExistingConfig() {
+            offerImportExistingSetup()
         } else {
             showSetup()
         }
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// First run with a manual (gist) setup present — offer to adopt it.
+    private func offerImportExistingSetup() {
+        let a = NSAlert()
+        a.messageText = "Existing Frigate setup found"
+        a.informativeText = "A Frigate config was found at ~/frigate/config/config.yaml. Import your cameras and settings so you can manage everything from this app?"
+        a.addButton(withTitle: "Import"); a.addButton(withTitle: "Start fresh")
+        guard a.runModal() == .alertFirstButtonReturn else { showSetup(); return }
+        orch.importFrigateConfig(from: orch.existingConfigPath) { [weak self] _, _ in
+            self?.showSetup()
+            self?.orch.detectOldServices { found in
+                guard let self = self, !found.isEmpty else { return }
+                let b = NSAlert()
+                b.messageText = "Disable old manual services?"
+                b.informativeText = "These launch agents from the manual setup are still running and will fight this app for the detector:\n\n\(found.joined(separator: ", "))\n\nDisable them so this app can manage the stack?"
+                b.addButton(withTitle: "Disable"); b.addButton(withTitle: "Keep")
+                if b.runModal() == .alertFirstButtonReturn { self.orch.disableOldServices { _ in } }
+            }
+        }
     }
 
     func showSetup() {

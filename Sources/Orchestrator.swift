@@ -110,6 +110,100 @@ final class Orchestrator {
         }
     }
 
+    // MARK: adopt an existing (manual / gist) setup
+
+    /// Where a manual "gist" setup typically keeps its Frigate config.
+    var existingConfigPath: String { NSString(string: "~/frigate/config/config.yaml").expandingTildeInPath }
+    func hasExistingConfig() -> Bool { FileManager.default.fileExists(atPath: existingConfigPath) }
+
+    /// Old manual launchd agents from the gist that conflict with this app managing the stack.
+    private let oldAgents = ["com.frigate.detector", "com.frigate.watch",
+                             "com.frigate.container-ensure", "com.frigate.genaibridge"]
+
+    /// Import cameras / MQTT / model from an existing Frigate `config.yaml` into app settings.
+    func importFrigateConfig(from path: String, _ done: @escaping (Bool, Int) -> Void) {
+        DispatchQueue.global().async {
+            let res = Bundle.main.resourceURL!.appendingPathComponent("engine")
+            let py = res.appendingPathComponent("python/bin/python3").path
+            let script = res.appendingPathComponent("detector/yaml2json.py").path
+            let r = Shell.run("'\(py)' '\(script)' '\(path)'", timeout: 20)
+            guard let data = r.out.data(using: .utf8),
+                  let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], !obj.isEmpty else {
+                self.log("Couldn't read that file — it needs to be a valid Frigate config.yaml.")
+                DispatchQueue.main.async { done(false, 0) }; return
+            }
+            // go2rtc streams hold the real camera URLs
+            var streams: [String: String] = [:]
+            if let g = obj["go2rtc"] as? [String: Any], let st = g["streams"] as? [String: Any] {
+                for (name, val) in st {
+                    var url = (val as? [Any])?.first as? String ?? (val as? String ?? "")
+                    url = url.replacingOccurrences(of: "ffmpeg:", with: "")
+                    if let h = url.firstIndex(of: "#") { url = String(url[..<h]) }
+                    streams[name] = url.trimmingCharacters(in: .whitespaces)
+                }
+            }
+            var cams: [CameraConfig] = []
+            if let cameras = obj["cameras"] as? [String: Any] {
+                for (name, cfgAny) in cameras {
+                    var cam = CameraConfig(); cam.name = name
+                    cam.streamURL = streams[name] ?? ""
+                    cam.subStreamURL = streams[name + "_sub"] ?? ""
+                    if let cfg = cfgAny as? [String: Any] {
+                        if let fn = cfg["friendly_name"] as? String { cam.friendlyName = fn }
+                        if let det = cfg["detect"] as? [String: Any] {
+                            if let f = det["fps"] as? Int { cam.detectFPS = f }
+                            if let w = det["width"] as? Int { cam.detectWidth = w }
+                            if let h = det["height"] as? Int { cam.detectHeight = h }
+                        }
+                        if let o = cfg["objects"] as? [String: Any], let t = o["track"] as? [String], !t.isEmpty { cam.trackedObjects = t }
+                        if let ui = cfg["ui"] as? [String: Any], let ord = ui["order"] as? Int { cam.uiOrder = ord }
+                    }
+                    cams.append(cam)
+                }
+                cams.sort { $0.uiOrder < $1.uiOrder }
+            }
+            self.store.update { c in
+                if let m = obj["mqtt"] as? [String: Any] {
+                    c.mqtt.enabled = (m["enabled"] as? Bool) ?? true
+                    if let h = m["host"] as? String { c.mqtt.host = h }
+                    if let p = m["port"] as? Int { c.mqtt.port = p }
+                    if let u = m["user"] as? String { c.mqtt.user = u }
+                    if let pw = m["password"] { c.mqtt.password = "\(pw)" }
+                }
+                if let model = obj["model"] as? [String: Any] {
+                    if let mt = model["model_type"] as? String { c.yolo.modelType = mt }
+                    if let w = model["width"] as? Int { c.yolo.width = w }
+                    if let h = model["height"] as? Int { c.yolo.height = h }
+                    if let p = model["path"] as? String { c.yolo.modelFile = (p as NSString).lastPathComponent }
+                }
+                if !cams.isEmpty { c.cameras = cams }
+            }
+            self.log("Imported \(cams.count) camera(s) + MQTT/model settings from \(path).")
+            DispatchQueue.main.async { done(true, cams.count) }
+        }
+    }
+
+    /// Which old manual launch agents are currently loaded (would conflict with this app)?
+    func detectOldServices(_ done: @escaping ([String]) -> Void) {
+        DispatchQueue.global().async {
+            let list = Shell.run("launchctl list 2>/dev/null", timeout: 8).out
+            let found = self.oldAgents.filter { list.contains($0) }
+            DispatchQueue.main.async { done(found) }
+        }
+    }
+
+    /// Disable the old manual launch agents so this app can own the detector + stack.
+    func disableOldServices(_ done: @escaping (Bool) -> Void) {
+        DispatchQueue.global().async {
+            let uid = Shell.run("id -u", timeout: 5).out.trimmingCharacters(in: .whitespacesAndNewlines)
+            for a in self.oldAgents {
+                _ = Shell.run("launchctl bootout gui/\(uid)/\(a) 2>/dev/null; launchctl disable gui/\(uid)/\(a) 2>/dev/null; true", timeout: 8)
+            }
+            self.log("Disabled old manual services so the app can manage the detector + stack.")
+            DispatchQueue.main.async { done(true) }
+        }
+    }
+
     // MARK: detection
 
     func detect(_ done: @escaping (StackStatus) -> Void) {
